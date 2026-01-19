@@ -1,0 +1,290 @@
+# Pipeline Alerting Rules for Open Forge
+# Dagster pipeline monitoring alerts
+
+groups:
+  - name: pipeline.runs
+    interval: 30s
+    rules:
+      - alert: PipelineRunFailure
+        expr: |
+          increase(dagster_run_total{status="FAILURE"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Pipeline run failed"
+          description: "Pipeline {{ $labels.pipeline_name }} has failed runs in the last 15 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/pipeline-failure"
+          dashboard_url: "https://grafana.open-forge.io/d/pipeline-execution"
+
+      - alert: PipelineHighFailureRate
+        expr: |
+          (
+            sum(rate(dagster_run_total{status="FAILURE"}[1h])) by (pipeline_name)
+            /
+            sum(rate(dagster_run_total[1h])) by (pipeline_name)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: pipeline
+          team: data
+        annotations:
+          summary: "High pipeline failure rate"
+          description: "Pipeline {{ $labels.pipeline_name }} has {{ $value | humanizePercentage }} failure rate in the last hour."
+          runbook_url: "https://docs.open-forge.io/runbooks/pipeline-high-failure-rate"
+
+      - alert: PipelineLongRunning
+        expr: |
+          (time() - dagster_run_start_time_seconds{status="STARTED"}) > 600
+        for: 1m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Long-running pipeline detected"
+          description: "Pipeline run {{ $labels.run_id }} for {{ $labels.pipeline_name }} has been running for {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/pipeline-long-running"
+
+      - alert: PipelineLongRunningCritical
+        expr: |
+          (time() - dagster_run_start_time_seconds{status="STARTED"}) > 3600
+        for: 1m
+        labels:
+          severity: critical
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Critical: Pipeline running too long"
+          description: "Pipeline run {{ $labels.run_id }} has been running for {{ $value | humanizeDuration }} (>1h), immediate attention required."
+          runbook_url: "https://docs.open-forge.io/runbooks/pipeline-long-running"
+
+      - alert: PipelineRunQueueBacklog
+        expr: |
+          dagster_run_queue_length > 20
+        for: 10m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Pipeline run queue backlog"
+          description: "{{ $value }} pipeline runs are queued, processing may be delayed."
+          runbook_url: "https://docs.open-forge.io/runbooks/pipeline-queue-backlog"
+
+  - name: pipeline.sensors
+    interval: 30s
+    rules:
+      - alert: SensorFailure
+        expr: |
+          increase(dagster_sensor_tick_total{status="FAILURE"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Sensor tick failed"
+          description: "Sensor {{ $labels.sensor_name }} has failed ticks in the last 15 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/sensor-failure"
+
+      - alert: SensorHighFailureRate
+        expr: |
+          (
+            sum(rate(dagster_sensor_tick_total{status="FAILURE"}[1h])) by (sensor_name)
+            /
+            sum(rate(dagster_sensor_tick_total[1h])) by (sensor_name)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          service: pipeline
+          team: data
+        annotations:
+          summary: "High sensor failure rate"
+          description: "Sensor {{ $labels.sensor_name }} has {{ $value | humanizePercentage }} failure rate in the last hour."
+          runbook_url: "https://docs.open-forge.io/runbooks/sensor-high-failure-rate"
+
+      - alert: SensorNotRunning
+        expr: |
+          dagster_sensor_running == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Sensor not running"
+          description: "Sensor {{ $labels.sensor_name }} is not running and may be missing events."
+          runbook_url: "https://docs.open-forge.io/runbooks/sensor-not-running"
+
+      - alert: SensorLagging
+        expr: |
+          (time() - dagster_sensor_last_tick_timestamp_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Sensor lagging behind"
+          description: "Sensor {{ $labels.sensor_name }} last tick was {{ $value | humanizeDuration }} ago."
+          runbook_url: "https://docs.open-forge.io/runbooks/sensor-lagging"
+
+  - name: pipeline.assets
+    interval: 30s
+    rules:
+      - alert: AssetMaterializationFailure
+        expr: |
+          increase(dagster_asset_materialization_total{status="FAILURE"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Asset materialization failed"
+          description: "Asset {{ $labels.asset_key }} has failed materializations in the last 15 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/asset-materialization-failure"
+
+      - alert: AssetMaterializationSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(dagster_asset_materialization_duration_seconds_bucket[1h])) by (le, asset_key)
+          ) > 600
+        for: 5m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Slow asset materialization"
+          description: "Asset {{ $labels.asset_key }} P95 materialization time is {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/asset-materialization-slow"
+
+      - alert: AssetStale
+        expr: |
+          (time() - dagster_asset_last_materialization_timestamp_seconds) > 86400
+          and
+          dagster_asset_freshness_policy_enabled == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Asset data is stale"
+          description: "Asset {{ $labels.asset_key }} was last materialized {{ $value | humanizeDuration }} ago and may be stale."
+          runbook_url: "https://docs.open-forge.io/runbooks/asset-stale"
+
+      - alert: AssetPartitionsBehind
+        expr: |
+          dagster_asset_missing_partitions > 10
+        for: 15m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Asset has missing partitions"
+          description: "Asset {{ $labels.asset_key }} has {{ $value }} missing partitions."
+          runbook_url: "https://docs.open-forge.io/runbooks/asset-missing-partitions"
+
+  - name: pipeline.daemon
+    interval: 30s
+    rules:
+      - alert: DagsterDaemonDown
+        expr: |
+          up{job="dagster-daemon"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Dagster daemon is down"
+          description: "Dagster daemon has been unreachable for more than 2 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/dagster-daemon-down"
+
+      - alert: DagsterWebserverDown
+        expr: |
+          up{job="dagster-webserver"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Dagster webserver is down"
+          description: "Dagster webserver has been unreachable for more than 2 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/dagster-webserver-down"
+
+      - alert: DagsterSchedulerBehind
+        expr: |
+          (time() - dagster_scheduler_last_heartbeat_timestamp_seconds) > 120
+        for: 2m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Dagster scheduler is behind"
+          description: "Dagster scheduler last heartbeat was {{ $value | humanizeDuration }} ago."
+          runbook_url: "https://docs.open-forge.io/runbooks/dagster-scheduler-behind"
+
+  - name: pipeline.schedules
+    interval: 30s
+    rules:
+      - alert: ScheduledRunMissed
+        expr: |
+          increase(dagster_schedule_tick_total{status="SKIPPED"}[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Scheduled runs being skipped"
+          description: "Schedule {{ $labels.schedule_name }} has skipped {{ $value }} ticks in the last hour."
+          runbook_url: "https://docs.open-forge.io/runbooks/schedule-skipped"
+
+      - alert: ScheduleFailure
+        expr: |
+          increase(dagster_schedule_tick_total{status="FAILURE"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: pipeline
+          team: data
+        annotations:
+          summary: "Schedule tick failed"
+          description: "Schedule {{ $labels.schedule_name }} has failed ticks."
+          runbook_url: "https://docs.open-forge.io/runbooks/schedule-failure"
+
+  # Recording rules for efficient querying
+  - name: pipeline.recording
+    interval: 30s
+    rules:
+      - record: pipeline:run_duration_seconds:p50
+        expr: histogram_quantile(0.50, sum(rate(dagster_run_duration_seconds_bucket[1h])) by (le, pipeline_name))
+
+      - record: pipeline:run_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(dagster_run_duration_seconds_bucket[1h])) by (le, pipeline_name))
+
+      - record: pipeline:run_failure_rate:1h
+        expr: |
+          sum(rate(dagster_run_total{status="FAILURE"}[1h])) by (pipeline_name)
+          /
+          sum(rate(dagster_run_total[1h])) by (pipeline_name)
+
+      - record: pipeline:runs_by_status
+        expr: sum(dagster_run_total) by (status, pipeline_name)
+
+      - record: pipeline:asset_materialization_rate:1h
+        expr: sum(rate(dagster_asset_materialization_total[1h])) by (asset_key, status)
+
+      - record: pipeline:sensor_tick_rate:1h
+        expr: sum(rate(dagster_sensor_tick_total[1h])) by (sensor_name, status)

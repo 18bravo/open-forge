@@ -1,0 +1,160 @@
+# ServiceMonitor for Dagster Services
+# Requires Prometheus Operator to be installed
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dagster-webserver
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: dagster
+    app.kubernetes.io/component: webserver
+    app.kubernetes.io/part-of: open-forge
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dagster
+      app.kubernetes.io/component: webserver
+  namespaceSelector:
+    matchNames:
+      - open-forge
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 15s
+      scheme: http
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - action: replace
+          targetLabel: service
+          replacement: dagster-webserver
+  targetLabels:
+    - app.kubernetes.io/name
+    - app.kubernetes.io/version
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dagster-daemon
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: dagster
+    app.kubernetes.io/component: daemon
+    app.kubernetes.io/part-of: open-forge
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dagster
+      app.kubernetes.io/component: daemon
+  namespaceSelector:
+    matchNames:
+      - open-forge
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 15s
+      scheme: http
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - action: replace
+          targetLabel: service
+          replacement: dagster-daemon
+  targetLabels:
+    - app.kubernetes.io/name
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dagster-code-server
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: dagster
+    app.kubernetes.io/component: code-server
+    app.kubernetes.io/part-of: open-forge
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dagster
+      app.kubernetes.io/component: code-server
+  namespaceSelector:
+    matchNames:
+      - open-forge
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 15s
+      scheme: http
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - action: replace
+          targetLabel: service
+          replacement: dagster-code-server
+  targetLabels:
+    - app.kubernetes.io/name
+---
+# PrometheusRule for Dagster-specific SLOs
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dagster-rules
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: dagster
+    prometheus: main
+    role: alert-rules
+spec:
+  groups:
+    - name: dagster.slo
+      interval: 30s
+      rules:
+        # Pipeline success rate over 7 days
+        - record: dagster:pipeline:success_rate:7d
+          expr: |
+            sum(increase(dagster_run_total{status="SUCCESS"}[7d])) by (pipeline_name)
+            /
+            sum(increase(dagster_run_total{status=~"SUCCESS|FAILURE"}[7d])) by (pipeline_name)
+
+        # Average run duration
+        - record: dagster:pipeline:avg_duration:1h
+          expr: |
+            sum(rate(dagster_run_duration_seconds_sum[1h])) by (pipeline_name)
+            /
+            sum(rate(dagster_run_duration_seconds_count[1h])) by (pipeline_name)
+
+        # Sensor reliability
+        - record: dagster:sensor:success_rate:7d
+          expr: |
+            sum(increase(dagster_sensor_tick_total{status="SUCCESS"}[7d])) by (sensor_name)
+            /
+            sum(increase(dagster_sensor_tick_total[7d])) by (sensor_name)
+
+        # Asset freshness compliance
+        - record: dagster:asset:freshness_compliance
+          expr: |
+            sum(dagster_asset_freshness_policy_met) by (asset_key)
+            /
+            count(dagster_asset_freshness_policy_enabled) by (asset_key)

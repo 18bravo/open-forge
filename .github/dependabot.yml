@@ -1,0 +1,257 @@
+# =============================================================================
+# Dependabot Configuration for Open Forge
+# =============================================================================
+# This configuration enables automated dependency updates for:
+# - Python packages (pip)
+# - Node.js packages (npm)
+# - GitHub Actions
+# - Docker base images
+#
+# See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# =============================================================================
+
+version: 2
+
+registries:
+  # GitHub Container Registry for Docker images
+  ghcr:
+    type: docker-registry
+    url: https://ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
+
+updates:
+  # ---------------------------------------------------------------------------
+  # Python Dependencies (Root pyproject.toml)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "18bravo/platform-team"
+    labels:
+      - "dependencies"
+      - "python"
+      - "automated"
+    commit-message:
+      prefix: "deps(python):"
+    groups:
+      # Group LangChain ecosystem updates
+      langchain:
+        patterns:
+          - "langchain*"
+          - "langgraph*"
+          - "langsmith*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group data processing libraries
+      data-libs:
+        patterns:
+          - "polars"
+          - "sqlalchemy*"
+          - "asyncpg"
+          - "pyiceberg*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group observability libraries
+      observability:
+        patterns:
+          - "opentelemetry*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group FastAPI ecosystem
+      fastapi:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "strawberry*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group development tools
+      dev-tools:
+        dependency-type: "development"
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "black"
+          - "isort"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # Node.js Dependencies (UI Package)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/packages/ui"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "18bravo/frontend-team"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "automated"
+    commit-message:
+      prefix: "deps(npm):"
+    groups:
+      # Group React ecosystem
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group Next.js ecosystem
+      nextjs:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group Radix UI components
+      radix:
+        patterns:
+          - "@radix-ui/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group TanStack libraries
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group testing libraries
+      testing:
+        dependency-type: "development"
+        patterns:
+          - "vitest"
+          - "@testing-library/*"
+          - "jsdom"
+          - "msw"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group TypeScript and linting
+      typescript-eslint:
+        dependency-type: "development"
+        patterns:
+          - "typescript"
+          - "eslint*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group Tailwind CSS
+      tailwind:
+        patterns:
+          - "tailwindcss*"
+          - "autoprefixer"
+          - "postcss"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Ignore major version updates for framework
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "18bravo/devops-team"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "ci(actions):"
+    groups:
+      # Group all GitHub Actions updates
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---------------------------------------------------------------------------
+  # Docker Dependencies
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/infrastructure/docker"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "18bravo/devops-team"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+    commit-message:
+      prefix: "deps(docker):"
+    ignore:
+      # Be conservative with base image major updates
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
+  # ---------------------------------------------------------------------------
+  # Kubernetes Dependencies (Kustomize)
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: "docker"
+    directory: "/infrastructure/kubernetes"
+    schedule:
+      interval: "monthly"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "18bravo/devops-team"
+    labels:
+      - "dependencies"
+      - "kubernetes"
+      - "automated"
+    commit-message:
+      prefix: "deps(k8s):"

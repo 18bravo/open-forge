@@ -1,0 +1,297 @@
+# =============================================================================
+# Deploy Dev Workflow for Open Forge
+# =============================================================================
+# This workflow deploys to the development Kubernetes namespace:
+# - Triggers on push to main branch
+# - Uses Kustomize overlays for environment-specific configuration
+# - Performs health checks after deployment
+# - Provides rollback on failure
+# =============================================================================
+
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/**'
+      - 'infrastructure/**'
+      - '.github/workflows/deploy-dev.yml'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+        type: string
+
+  # Trigger after successful build
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+    branches:
+      - main
+
+# Only one deployment at a time
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME: open-forge-cluster
+  NAMESPACE: open-forge-dev
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/open-forge
+
+jobs:
+  # ===========================================================================
+  # Deploy to Development
+  # ===========================================================================
+  deploy:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    # Only run if build workflow succeeded or this was manually triggered
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    environment:
+      name: development
+      url: https://dev.open-forge.io
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_DEV }}
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: '5.3.0'
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.image_tag }}"
+          else
+            TAG="sha-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Update image tags in Kustomize
+        working-directory: infrastructure/kustomize/overlays/dev
+        run: |
+          kustomize edit set image \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-api=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-ui=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-ui:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-dagster=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-dagster:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-langflow=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-langflow:${{ steps.tag.outputs.tag }}
+
+      - name: Validate Kustomize build
+        working-directory: infrastructure/kustomize/overlays/dev
+        run: |
+          kustomize build . > /dev/null
+
+      - name: Preview deployment
+        working-directory: infrastructure/kustomize/overlays/dev
+        run: |
+          echo "## Deployment Preview" >> $GITHUB_STEP_SUMMARY
+          echo '```yaml' >> $GITHUB_STEP_SUMMARY
+          kustomize build . | head -100 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Deploy to Kubernetes
+        working-directory: infrastructure/kustomize/overlays/dev
+        run: |
+          kustomize build . | kubectl apply -f - --namespace=${{ env.NAMESPACE }}
+
+      - name: Wait for API deployment
+        run: |
+          kubectl rollout status deployment/open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Wait for UI deployment
+        run: |
+          kubectl rollout status deployment/open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Wait for Dagster deployment
+        run: |
+          kubectl rollout status deployment/open-forge-dagster-webserver \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Health check - API
+        run: |
+          API_URL=$(kubectl get ingress open-forge-api-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          echo "Checking API health at https://${API_URL}/health"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://${API_URL}/health" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "API health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "API health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+      - name: Health check - UI
+        run: |
+          UI_URL=$(kubectl get ingress open-forge-ui-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          echo "Checking UI health at https://${UI_URL}"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://${UI_URL}" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "UI health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "UI health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+      - name: Get deployment status
+        if: always()
+        run: |
+          echo "## Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pods" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          kubectl get pods --namespace=${{ env.NAMESPACE }} >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          kubectl get services --namespace=${{ env.NAMESPACE }} >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Rollback on Failure
+  # ===========================================================================
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure()
+
+    steps:
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_DEV }}
+
+      - name: Rollback API deployment
+        run: |
+          kubectl rollout undo deployment/open-forge-api \
+            --namespace=${{ env.NAMESPACE }} || true
+
+      - name: Rollback UI deployment
+        run: |
+          kubectl rollout undo deployment/open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} || true
+
+      - name: Rollback Dagster deployment
+        run: |
+          kubectl rollout undo deployment/open-forge-dagster-webserver \
+            --namespace=${{ env.NAMESPACE }} || true
+
+      - name: Notify rollback
+        run: |
+          echo "## Rollback Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment failed and rollback was executed automatically." >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Notify Deployment
+  # ===========================================================================
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+
+    steps:
+      - name: Notify Slack on success
+        if: needs.deploy.result == 'success'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Open Forge Dev Deployment Successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Open Forge Dev Deployment Successful*\n\nCommit: `${{ github.sha }}`\nBranch: `${{ github.ref_name }}`\nEnvironment: Development"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Notify Slack on failure
+        if: needs.deploy.result == 'failure'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Open Forge Dev Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Open Forge Dev Deployment Failed*\n\nCommit: `${{ github.sha }}`\nBranch: `${{ github.ref_name }}`\nEnvironment: Development\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

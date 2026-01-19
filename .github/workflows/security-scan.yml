@@ -1,0 +1,376 @@
+# =============================================================================
+# Security Scan Workflow for Open Forge
+# =============================================================================
+# This workflow performs security scanning:
+# - Dependency scanning with Dependabot integration
+# - Container image scanning with Trivy
+# - SAST scanning with CodeQL
+# - Secret detection with Gitleaks
+# - License compliance checking
+# =============================================================================
+
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+  packages: read
+
+jobs:
+  # ===========================================================================
+  # Python Dependency Scanning
+  # ===========================================================================
+  python-deps:
+    name: Python Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Install project dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --format json --output pip-audit-results.json || true
+
+      - name: Upload pip-audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+          retention-days: 30
+
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -f pip-audit-results.json ]; then
+            CRITICAL=$(cat pip-audit-results.json | jq '[.[] | select(.vulns[] | .fix_versions | length > 0)] | length')
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "Found $CRITICAL vulnerabilities with available fixes"
+              cat pip-audit-results.json | jq '.[] | select(.vulns[] | .fix_versions | length > 0)'
+            fi
+          fi
+
+  # ===========================================================================
+  # Node.js Dependency Scanning
+  # ===========================================================================
+  node-deps:
+    name: Node.js Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: packages/ui
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: packages/ui
+        run: |
+          npm audit --json > npm-audit-results.json || true
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: packages/ui/npm-audit-results.json
+          retention-days: 30
+
+      - name: Check for critical vulnerabilities
+        working-directory: packages/ui
+        run: |
+          if [ -f npm-audit-results.json ]; then
+            CRITICAL=$(cat npm-audit-results.json | jq '.metadata.vulnerabilities.critical // 0')
+            HIGH=$(cat npm-audit-results.json | jq '.metadata.vulnerabilities.high // 0')
+            echo "Critical: $CRITICAL, High: $HIGH"
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "::warning::Found $CRITICAL critical vulnerabilities"
+            fi
+          fi
+
+  # ===========================================================================
+  # Container Image Scanning with Trivy
+  # ===========================================================================
+  trivy-scan:
+    name: Trivy Container Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: api
+            dockerfile: infrastructure/docker/Dockerfile.api
+          - name: ui
+            dockerfile: infrastructure/docker/Dockerfile.ui
+          - name: dagster
+            dockerfile: infrastructure/docker/Dockerfile.dagster
+          - name: langflow
+            dockerfile: infrastructure/docker/Dockerfile.langflow
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: false
+          load: true
+          tags: open-forge-${{ matrix.image.name }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'open-forge-${{ matrix.image.name }}:scan'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.image.name }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          scanners: 'vuln'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.image.name }}.sarif'
+          category: 'trivy-${{ matrix.image.name }}'
+        continue-on-error: true
+
+      - name: Run Trivy for summary
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'open-forge-${{ matrix.image.name }}:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          vuln-type: 'os,library'
+          scanners: 'vuln'
+
+  # ===========================================================================
+  # CodeQL SAST Scanning
+  # ===========================================================================
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - python
+          - javascript-typescript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # ===========================================================================
+  # Secret Detection with Gitleaks
+  # ===========================================================================
+  gitleaks:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: true
+
+  # ===========================================================================
+  # License Compliance
+  # ===========================================================================
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-licenses
+        run: pip install pip-licenses
+
+      - name: Install project dependencies
+        run: pip install -e .
+
+      - name: Check Python licenses
+        run: |
+          pip-licenses --format=json --output-file=python-licenses.json
+          pip-licenses --format=markdown --output-file=python-licenses.md
+
+          # Check for problematic licenses
+          PROBLEMATIC=$(cat python-licenses.json | jq '[.[] | select(.License | test("GPL|AGPL|LGPL|SSPL"; "i"))] | length')
+          if [ "$PROBLEMATIC" -gt 0 ]; then
+            echo "::warning::Found $PROBLEMATIC packages with copyleft licenses"
+            cat python-licenses.json | jq '.[] | select(.License | test("GPL|AGPL|LGPL|SSPL"; "i"))'
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check Node.js licenses
+        working-directory: packages/ui
+        run: |
+          npx license-checker --json > node-licenses.json || true
+          npx license-checker --summary || true
+
+      - name: Upload license reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-reports
+          path: |
+            python-licenses.json
+            python-licenses.md
+            packages/ui/node-licenses.json
+          retention-days: 30
+
+  # ===========================================================================
+  # Infrastructure as Code Scanning
+  # ===========================================================================
+  iac-scan:
+    name: IaC Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infrastructure/
+          framework: kubernetes,dockerfile
+          output_format: cli,sarif
+          output_file_path: console,checkov-results.sarif
+          soft_fail: true
+
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov-results.sarif
+          category: 'checkov'
+        continue-on-error: true
+
+  # ===========================================================================
+  # Security Summary
+  # ===========================================================================
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs:
+      - python-deps
+      - node-deps
+      - trivy-scan
+      - codeql
+      - gitleaks
+      - license-check
+      - iac-scan
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: security-reports
+        continue-on-error: true
+
+      - name: Generate security summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Dependencies | ${{ needs.python-deps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node.js Dependencies | ${{ needs.node-deps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Scanning (Trivy) | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST (CodeQL) | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Detection | ${{ needs.gitleaks.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| License Compliance | ${{ needs.license-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| IaC Scanning | ${{ needs.iac-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*Security scan completed at $(date -u)*" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for failures
+        if: |
+          needs.gitleaks.result == 'failure' ||
+          needs.codeql.result == 'failure'
+        run: |
+          echo "Critical security checks failed!"
+          exit 1

@@ -1,34 +1,175 @@
-# Dockerfile for Dagster
-FROM python:3.11-slim
+# =============================================================================
+# Dockerfile for Open Forge Dagster (Pipeline Orchestration)
+# =============================================================================
+# Multi-stage build for optimized production image:
+# - Stage 1: Builder - Install dependencies and prepare environment
+# - Stage 2: Production - Minimal runtime for Dagster services
+#
+# Build args:
+#   VERSION - Application version (default: 0.0.0-dev)
+#   BUILD_SHA - Git commit SHA for traceability
+#
+# This image supports both dagster-webserver and dagster-daemon services.
+# Use different CMD/entrypoint for each service.
+# =============================================================================
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Install dependencies
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim AS builder
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    git \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create dagster user
-RUN useradd -m -s /bin/bash dagster
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+
+# Set working directory
+WORKDIR /build
+
+# Copy and install Dagster-specific requirements first
+COPY infrastructure/docker/requirements-dagster.txt ./requirements-dagster.txt
+RUN pip install --no-cache-dir -r requirements-dagster.txt
+
+# Copy and install main project dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir -e . || true
+
+# Copy source packages needed for pipelines
+COPY packages/core/ packages/core/
+COPY packages/ontology/ packages/ontology/
+COPY packages/connectors/ packages/connectors/
+COPY packages/pipelines/ packages/pipelines/
+
+# Install pipeline-related packages
+RUN pip install --no-cache-dir \
+    -e packages/core \
+    -e packages/ontology \
+    -e packages/connectors \
+    -e packages/pipelines \
+    || true
+
+# -----------------------------------------------------------------------------
+# Stage 2: Production - Minimal runtime image
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim AS production
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Labels for container metadata
+LABEL org.opencontainers.image.title="Open Forge Dagster"
+LABEL org.opencontainers.image.description="Dagster pipeline orchestration for Open Forge"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/18bravo/open-forge"
+LABEL org.opencontainers.image.vendor="18bravo"
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 dagster \
+    && useradd --uid 1000 --gid dagster --shell /bin/bash --create-home dagster
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Set working directory
 WORKDIR /opt/dagster
 
-# Install Python dependencies
-COPY requirements-dagster.txt .
-RUN pip install --no-cache-dir -r requirements-dagster.txt
+# Copy Dagster configuration
+COPY infrastructure/docker/dagster.yaml /opt/dagster/dagster_home/dagster.yaml
 
-# Create dagster home directory
-RUN mkdir -p /opt/dagster/dagster_home && \
-    chown -R dagster:dagster /opt/dagster
+# Copy pipeline code
+COPY --from=builder /build/packages/pipelines /opt/dagster/app/pipelines
+COPY --from=builder /build/packages/core /opt/dagster/app/core
+COPY --from=builder /build/packages/ontology /opt/dagster/app/ontology
+COPY --from=builder /build/packages/connectors /opt/dagster/app/connectors
 
-# Copy dagster config
-COPY dagster.yaml /opt/dagster/dagster_home/dagster.yaml
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/dagster/app/pipelines/src:/opt/dagster/app/core/src:/opt/dagster/app/ontology/src:/opt/dagster/app/connectors/src \
+    DAGSTER_HOME=/opt/dagster/dagster_home \
+    APP_VERSION=${VERSION} \
+    BUILD_SHA=${BUILD_SHA}
 
-# Switch to dagster user
+# Create dagster home directory and set permissions
+RUN mkdir -p /opt/dagster/dagster_home \
+    && chown -R dagster:dagster /opt/dagster
+
+# Switch to non-root user
 USER dagster
 
-# Set environment
-ENV DAGSTER_HOME=/opt/dagster/dagster_home
+# Expose Dagster webserver port
+EXPOSE 3000
 
-# Default command
+# Health check for webserver
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/server_info || exit 1
+
+# Default command - webserver (override for daemon)
+CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
+
+# -----------------------------------------------------------------------------
+# Stage 3: Daemon - Dagster daemon service
+# -----------------------------------------------------------------------------
+FROM production AS daemon
+
+# Health check for daemon (different from webserver)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pgrep -f "dagster-daemon" || exit 1
+
+# Run dagster daemon
+CMD ["dagster-daemon", "run"]
+
+# -----------------------------------------------------------------------------
+# Stage 4: Development - Full development environment
+# -----------------------------------------------------------------------------
+FROM builder AS development
+
+# Install development dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    ipython
+
+# Set development environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DAGSTER_HOME=/opt/dagster/dagster_home \
+    DEBUG=1
+
+WORKDIR /opt/dagster
+
+# Copy configuration
+COPY infrastructure/docker/dagster.yaml /opt/dagster/dagster_home/dagster.yaml
+
+# Create dagster home
+RUN mkdir -p /opt/dagster/dagster_home
+
+# Expose ports
+EXPOSE 3000
+
+# Development command
 CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]

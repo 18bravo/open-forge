@@ -1,0 +1,493 @@
+# Infrastructure Alerting Rules for Open Forge
+# Database, Redis, MinIO, and Node monitoring
+
+groups:
+  - name: postgresql
+    interval: 30s
+    rules:
+      - alert: PostgreSQLDown
+        expr: |
+          pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-down"
+          dashboard_url: "https://grafana.open-forge.io/d/database-performance"
+
+      - alert: PostgreSQLHighConnections
+        expr: |
+          (
+            pg_stat_activity_count
+            /
+            pg_settings_max_connections
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL connection usage high"
+          description: "PostgreSQL is using {{ $value | humanizePercentage }} of available connections."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-high-connections"
+
+      - alert: PostgreSQLConnectionExhaustion
+        expr: |
+          (
+            pg_stat_activity_count
+            /
+            pg_settings_max_connections
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL connection exhaustion imminent"
+          description: "PostgreSQL is using {{ $value | humanizePercentage }} of available connections, exhaustion imminent."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-connection-exhaustion"
+
+      - alert: PostgreSQLSlowQueries
+        expr: |
+          rate(pg_stat_activity_max_tx_duration{state="active"}[5m]) > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL has queries running longer than 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-slow-queries"
+
+      - alert: PostgreSQLDeadlocks
+        expr: |
+          increase(pg_stat_database_deadlocks[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "PostgreSQL database {{ $labels.datname }} has experienced {{ $value }} deadlocks in the last 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-deadlocks"
+
+      - alert: PostgreSQLReplicationLag
+        expr: |
+          pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "PostgreSQL replication lag is {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-replication-lag"
+
+      - alert: PostgreSQLHighDiskUsage
+        expr: |
+          (
+            pg_database_size_bytes
+            /
+            (100 * 1024 * 1024 * 1024)
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL database size warning"
+          description: "PostgreSQL database {{ $labels.datname }} is using {{ $value | humanize }}GB of disk."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-disk-usage"
+
+      - alert: PostgreSQLCacheHitRateLow
+        expr: |
+          (
+            pg_stat_database_blks_hit
+            /
+            (pg_stat_database_blks_hit + pg_stat_database_blks_read)
+          ) < 0.95
+        for: 15m
+        labels:
+          severity: warning
+          service: postgresql
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL cache hit rate low"
+          description: "PostgreSQL cache hit rate for {{ $labels.datname }} is {{ $value | humanizePercentage }}, below 95% threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/postgresql-cache-hit-rate"
+
+  - name: redis
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: |
+          redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} has been unreachable for more than 1 minute."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-down"
+          dashboard_url: "https://grafana.open-forge.io/d/database-performance"
+
+      - alert: RedisHighMemoryUsage
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            redis_memory_max_bytes
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis is using {{ $value | humanizePercentage }} of max memory."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-memory-pressure"
+
+      - alert: RedisMemoryPressure
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            redis_memory_max_bytes
+          ) > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis memory pressure critical"
+          description: "Redis is using {{ $value | humanizePercentage }} of max memory, evictions may occur."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-memory-pressure"
+
+      - alert: RedisHighEvictions
+        expr: |
+          rate(redis_evicted_keys_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis high eviction rate"
+          description: "Redis is evicting {{ $value | humanize }} keys per second."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-evictions"
+
+      - alert: RedisHighClientConnections
+        expr: |
+          redis_connected_clients > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis high client connections"
+          description: "Redis has {{ $value }} connected clients."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-connections"
+
+      - alert: RedisReplicationBroken
+        expr: |
+          redis_connected_slaves < 1
+          and
+          redis_instance_info{role="master"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis replication broken"
+          description: "Redis master has lost all replicas."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-replication"
+
+      - alert: RedisSlowLog
+        expr: |
+          increase(redis_slowlog_length[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+          team: infrastructure
+        annotations:
+          summary: "Redis slow commands detected"
+          description: "Redis has {{ $value }} slow commands in the last 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/redis-slow-commands"
+
+  - name: minio
+    interval: 30s
+    rules:
+      - alert: MinIODown
+        expr: |
+          minio_cluster_health_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO cluster is unhealthy"
+          description: "MinIO cluster is reporting unhealthy status."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-down"
+          dashboard_url: "https://grafana.open-forge.io/d/database-performance"
+
+      - alert: MinIODiskSpaceLow
+        expr: |
+          (
+            minio_cluster_disk_free_bytes
+            /
+            minio_cluster_disk_total_bytes
+          ) < 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO disk space low"
+          description: "MinIO has only {{ $value | humanizePercentage }} free disk space."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-disk-space"
+
+      - alert: MinIODiskSpaceCritical
+        expr: |
+          (
+            minio_cluster_disk_free_bytes
+            /
+            minio_cluster_disk_total_bytes
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO disk space critical"
+          description: "MinIO has only {{ $value | humanizePercentage }} free disk space, action required."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-disk-space"
+
+      - alert: MinIOHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(minio_s3_requests_duration_seconds_bucket[5m])) by (le, api)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO high latency"
+          description: "MinIO {{ $labels.api }} P95 latency is {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-latency"
+
+      - alert: MinIOHighErrorRate
+        expr: |
+          (
+            sum(rate(minio_s3_requests_errors_total[5m])) by (api)
+            /
+            sum(rate(minio_s3_requests_total[5m])) by (api)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO high error rate"
+          description: "MinIO {{ $labels.api }} error rate is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-errors"
+
+      - alert: MinIOOfflineDisk
+        expr: |
+          minio_cluster_disk_offline_total > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: minio
+          team: infrastructure
+        annotations:
+          summary: "MinIO offline disk detected"
+          description: "MinIO has {{ $value }} offline disks."
+          runbook_url: "https://docs.open-forge.io/runbooks/minio-offline-disk"
+
+  - name: kubernetes-nodes
+    interval: 30s
+    rules:
+      - alert: NodeNotReady
+        expr: |
+          kube_node_status_condition{condition="Ready", status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Kubernetes node not ready"
+          description: "Node {{ $labels.node }} is not ready for more than 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-not-ready"
+
+      - alert: NodeHighCPU
+        expr: |
+          (
+            1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node CPU usage high"
+          description: "Node {{ $labels.instance }} CPU usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-high-cpu"
+
+      - alert: NodeHighMemory
+        expr: |
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          )
+          /
+          node_memory_MemTotal_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node memory usage high"
+          description: "Node {{ $labels.instance }} memory usage is {{ $value | humanizePercentage }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-high-memory"
+
+      - alert: NodeDiskPressure
+        expr: |
+          kube_node_status_condition{condition="DiskPressure", status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node disk pressure"
+          description: "Node {{ $labels.node }} is experiencing disk pressure."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-disk-pressure"
+
+      - alert: NodeMemoryPressure
+        expr: |
+          kube_node_status_condition{condition="MemoryPressure", status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node memory pressure"
+          description: "Node {{ $labels.node }} is experiencing memory pressure."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-memory-pressure"
+
+      - alert: NodePIDPressure
+        expr: |
+          kube_node_status_condition{condition="PIDPressure", status="true"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node PID pressure"
+          description: "Node {{ $labels.node }} is experiencing PID pressure."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-pid-pressure"
+
+      - alert: NodeDiskSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          ) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: infrastructure
+        annotations:
+          summary: "Node disk space low"
+          description: "Node {{ $labels.instance }} filesystem {{ $labels.mountpoint }} has only {{ $value | humanizePercentage }} free space."
+          runbook_url: "https://docs.open-forge.io/runbooks/node-disk-space"
+
+  - name: kubernetes-pods
+    interval: 30s
+    rules:
+      - alert: PodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total{namespace="open-forge"}[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: backend
+        annotations:
+          summary: "Pod crash looping"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} has restarted {{ $value }} times in the last hour."
+          runbook_url: "https://docs.open-forge.io/runbooks/pod-crash-looping"
+
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_ready{namespace="open-forge", condition="true"} == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: backend
+        annotations:
+          summary: "Pod not ready"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for more than 10 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/pod-not-ready"
+
+      - alert: ContainerOOMKilled
+        expr: |
+          kube_pod_container_status_last_terminated_reason{namespace="open-forge", reason="OOMKilled"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          service: kubernetes
+          team: backend
+        annotations:
+          summary: "Container OOM killed"
+          description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} was OOM killed."
+          runbook_url: "https://docs.open-forge.io/runbooks/container-oom"
+
+  # Recording rules for infrastructure
+  - name: infrastructure.recording
+    interval: 30s
+    rules:
+      - record: postgresql:connection_utilization
+        expr: pg_stat_activity_count / pg_settings_max_connections
+
+      - record: redis:memory_utilization
+        expr: redis_memory_used_bytes / redis_memory_max_bytes
+
+      - record: minio:disk_utilization
+        expr: 1 - (minio_cluster_disk_free_bytes / minio_cluster_disk_total_bytes)
+
+      - record: node:cpu_utilization:5m
+        expr: 1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+      - record: node:memory_utilization
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes

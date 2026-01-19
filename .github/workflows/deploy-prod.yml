@@ -1,0 +1,545 @@
+# =============================================================================
+# Deploy Production Workflow for Open Forge
+# =============================================================================
+# This workflow deploys to the production Kubernetes namespace:
+# - Triggers on release tags (v*.*.*)
+# - Requires manual approval before deployment
+# - Uses blue-green deployment strategy
+# - Automated rollback on failure
+# - Comprehensive health checks and verification
+# =============================================================================
+
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., 1.0.0)'
+        required: true
+        type: string
+      skip_approval:
+        description: 'Skip manual approval (emergency only)'
+        required: false
+        default: false
+        type: boolean
+
+# Only one production deployment at a time
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME: open-forge-cluster
+  NAMESPACE: open-forge-prod
+  NAMESPACE_BLUE: open-forge-prod-blue
+  NAMESPACE_GREEN: open-forge-prod-green
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/open-forge
+
+jobs:
+  # ===========================================================================
+  # Prepare Deployment
+  # ===========================================================================
+  prepare:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      active_slot: ${{ steps.slot.outputs.active }}
+      target_slot: ${{ steps.slot.outputs.target }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.image_tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Deploying version: ${VERSION}"
+
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Determine active slot
+        id: slot
+        run: |
+          # Check which slot is currently active by looking at the service selector
+          ACTIVE=$(kubectl get service open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.selector.slot}' 2>/dev/null || echo "blue")
+
+          if [[ "$ACTIVE" == "blue" ]]; then
+            TARGET="green"
+          else
+            TARGET="blue"
+          fi
+
+          echo "active=${ACTIVE}" >> $GITHUB_OUTPUT
+          echo "target=${TARGET}" >> $GITHUB_OUTPUT
+          echo "Current active slot: ${ACTIVE}"
+          echo "Target slot: ${TARGET}"
+
+  # ===========================================================================
+  # Manual Approval
+  # ===========================================================================
+  approve:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: github.event.inputs.skip_approval != 'true'
+    environment:
+      name: production-approval
+
+    steps:
+      - name: Approval checkpoint
+        run: |
+          echo "## Production Deployment Approval" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Active Slot:** ${{ needs.prepare.outputs.active_slot }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Slot:** ${{ needs.prepare.outputs.target_slot }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This deployment has been approved." >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Deploy to Target Slot
+  # ===========================================================================
+  deploy-slot:
+    name: Deploy to ${{ needs.prepare.outputs.target_slot }} Slot
+    runs-on: ubuntu-latest
+    needs: [prepare, approve]
+    if: always() && (needs.approve.result == 'success' || github.event.inputs.skip_approval == 'true')
+    outputs:
+      api_url: ${{ steps.urls.outputs.api_url }}
+      ui_url: ${{ steps.urls.outputs.ui_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: '5.3.0'
+
+      - name: Update image tags in Kustomize
+        working-directory: infrastructure/kustomize/overlays/prod
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          kustomize edit set image \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-api=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${VERSION} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-ui=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-ui:${VERSION} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-dagster=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-dagster:${VERSION} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-langflow=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-langflow:${VERSION}
+
+      - name: Add slot label
+        working-directory: infrastructure/kustomize/overlays/prod
+        run: |
+          # Create a patch to add slot labels
+          cat >> slot-patch.yaml << EOF
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: open-forge-api
+          spec:
+            selector:
+              matchLabels:
+                slot: ${{ needs.prepare.outputs.target_slot }}
+            template:
+              metadata:
+                labels:
+                  slot: ${{ needs.prepare.outputs.target_slot }}
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: open-forge-ui
+          spec:
+            selector:
+              matchLabels:
+                slot: ${{ needs.prepare.outputs.target_slot }}
+            template:
+              metadata:
+                labels:
+                  slot: ${{ needs.prepare.outputs.target_slot }}
+          EOF
+
+          # Add patch to kustomization
+          kustomize edit add patch --path slot-patch.yaml
+
+      - name: Deploy to target slot
+        working-directory: infrastructure/kustomize/overlays/prod
+        run: |
+          TARGET_NAMESPACE="${{ env.NAMESPACE }}-${{ needs.prepare.outputs.target_slot }}"
+
+          # Ensure namespace exists
+          kubectl create namespace ${TARGET_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+          # Deploy
+          kustomize build . | kubectl apply -f - --namespace=${TARGET_NAMESPACE}
+
+      - name: Wait for deployments
+        run: |
+          TARGET_NAMESPACE="${{ env.NAMESPACE }}-${{ needs.prepare.outputs.target_slot }}"
+
+          kubectl rollout status deployment/open-forge-api \
+            --namespace=${TARGET_NAMESPACE} \
+            --timeout=600s
+
+          kubectl rollout status deployment/open-forge-ui \
+            --namespace=${TARGET_NAMESPACE} \
+            --timeout=600s
+
+          kubectl rollout status deployment/open-forge-dagster-webserver \
+            --namespace=${TARGET_NAMESPACE} \
+            --timeout=600s
+
+      - name: Get service URLs
+        id: urls
+        run: |
+          TARGET_NAMESPACE="${{ env.NAMESPACE }}-${{ needs.prepare.outputs.target_slot }}"
+
+          API_URL=$(kubectl get ingress open-forge-api-ingress \
+            --namespace=${TARGET_NAMESPACE} \
+            -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "api-${{ needs.prepare.outputs.target_slot }}.open-forge.io")
+
+          UI_URL=$(kubectl get ingress open-forge-ui-ingress \
+            --namespace=${TARGET_NAMESPACE} \
+            -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "app-${{ needs.prepare.outputs.target_slot }}.open-forge.io")
+
+          echo "api_url=https://${API_URL}" >> $GITHUB_OUTPUT
+          echo "ui_url=https://${UI_URL}" >> $GITHUB_OUTPUT
+
+  # ===========================================================================
+  # Verify Target Slot
+  # ===========================================================================
+  verify-slot:
+    name: Verify Target Slot
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-slot]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Health check - API
+        run: |
+          API_URL="${{ needs.deploy-slot.outputs.api_url }}"
+          echo "Checking API health at ${API_URL}/health"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${API_URL}/health" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "API health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "API health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+      - name: Health check - UI
+        run: |
+          UI_URL="${{ needs.deploy-slot.outputs.ui_url }}"
+          echo "Checking UI health at ${UI_URL}"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${UI_URL}" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "UI health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "UI health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+      - name: Run production smoke tests
+        env:
+          API_URL: ${{ needs.deploy-slot.outputs.api_url }}
+        run: |
+          echo "Running production smoke tests..."
+
+          # Health endpoint
+          curl -f "${API_URL}/health" || exit 1
+
+          # Critical endpoints
+          curl -f "${API_URL}/api/v1/health/ready" || echo "Readiness endpoint not available"
+
+          echo "Production smoke tests passed"
+
+  # ===========================================================================
+  # Switch Traffic
+  # ===========================================================================
+  switch-traffic:
+    name: Switch Traffic to ${{ needs.prepare.outputs.target_slot }}
+    runs-on: ubuntu-latest
+    needs: [prepare, verify-slot]
+
+    steps:
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Switch service to target slot
+        run: |
+          TARGET_SLOT="${{ needs.prepare.outputs.target_slot }}"
+
+          # Update the main service selectors to point to target slot
+          kubectl patch service open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            --type=json \
+            -p='[{"op": "replace", "path": "/spec/selector/slot", "value": "'${TARGET_SLOT}'"}]'
+
+          kubectl patch service open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} \
+            --type=json \
+            -p='[{"op": "replace", "path": "/spec/selector/slot", "value": "'${TARGET_SLOT}'"}]'
+
+          echo "Traffic switched to ${TARGET_SLOT} slot"
+
+      - name: Verify traffic switch
+        run: |
+          echo "Verifying traffic switch..."
+
+          # Wait a bit for DNS/routing to propagate
+          sleep 30
+
+          # Verify the main endpoints
+          PROD_API_URL=$(kubectl get ingress open-forge-api-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://${PROD_API_URL}/health" \
+            --max-time 10 || echo "000")
+
+          if [[ "$STATUS" != "200" ]]; then
+            echo "Production health check failed after traffic switch!"
+            exit 1
+          fi
+
+          echo "Traffic switch verified successfully"
+
+      - name: Record deployment
+        run: |
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Active Slot:** ${{ needs.prepare.outputs.target_slot }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous Slot:** ${{ needs.prepare.outputs.active_slot }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Rollback on Failure
+  # ===========================================================================
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-slot, verify-slot, switch-traffic]
+    if: failure()
+
+    steps:
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Rollback to previous slot
+        run: |
+          ACTIVE_SLOT="${{ needs.prepare.outputs.active_slot }}"
+
+          echo "Rolling back to ${ACTIVE_SLOT} slot..."
+
+          # Switch services back to previous slot
+          kubectl patch service open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            --type=json \
+            -p='[{"op": "replace", "path": "/spec/selector/slot", "value": "'${ACTIVE_SLOT}'"}]' || true
+
+          kubectl patch service open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} \
+            --type=json \
+            -p='[{"op": "replace", "path": "/spec/selector/slot", "value": "'${ACTIVE_SLOT}'"}]' || true
+
+          echo "Rollback complete"
+
+      - name: Verify rollback
+        run: |
+          sleep 15
+
+          PROD_API_URL=$(kubectl get ingress open-forge-api-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://${PROD_API_URL}/health" \
+            --max-time 10 || echo "000")
+
+          if [[ "$STATUS" == "200" ]]; then
+            echo "Rollback verified - production is healthy"
+          else
+            echo "WARNING: Rollback may have failed - status: ${STATUS}"
+          fi
+
+      - name: Notify rollback
+        run: |
+          echo "## PRODUCTION ROLLBACK EXECUTED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Production deployment failed and automatic rollback was executed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Rolled back to:** ${{ needs.prepare.outputs.active_slot }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Cleanup Old Slot
+  # ===========================================================================
+  cleanup:
+    name: Cleanup Old Slot
+    runs-on: ubuntu-latest
+    needs: [prepare, switch-traffic]
+    if: success()
+
+    steps:
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Scale down old slot
+        run: |
+          OLD_SLOT="${{ needs.prepare.outputs.active_slot }}"
+          OLD_NAMESPACE="${{ env.NAMESPACE }}-${OLD_SLOT}"
+
+          echo "Scaling down ${OLD_SLOT} slot..."
+
+          # Scale down but don't delete - keep for quick rollback
+          kubectl scale deployment/open-forge-api \
+            --namespace=${OLD_NAMESPACE} \
+            --replicas=1 || true
+
+          kubectl scale deployment/open-forge-ui \
+            --namespace=${OLD_NAMESPACE} \
+            --replicas=1 || true
+
+          echo "Old slot scaled down (1 replica kept for quick rollback)"
+
+  # ===========================================================================
+  # Notify Deployment
+  # ===========================================================================
+  notify:
+    name: Notify Production Deployment
+    runs-on: ubuntu-latest
+    needs: [prepare, switch-traffic]
+    if: always()
+
+    steps:
+      - name: Notify Slack on success
+        if: needs.switch-traffic.result == 'success'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Open Forge Production Deployment Successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Open Forge Production Deployment Successful*\n\nVersion: `${{ needs.prepare.outputs.version }}`\nActive Slot: `${{ needs.prepare.outputs.target_slot }}`\nEnvironment: Production\n\nhttps://open-forge.io"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Notify Slack on failure
+        if: needs.switch-traffic.result == 'failure' || needs.switch-traffic.result == 'cancelled'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "ALERT: Open Forge Production Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*ALERT: Open Forge Production Deployment Failed*\n\nVersion: `${{ needs.prepare.outputs.version }}`\nEnvironment: Production\n\nAutomatic rollback was executed.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Create GitHub Release
+        if: needs.switch-traffic.result == 'success' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ needs.prepare.outputs.version }}
+          body: |
+            ## Release ${{ needs.prepare.outputs.version }}
+
+            This release has been deployed to production.
+
+            ### Deployment Details
+            - **Version:** ${{ needs.prepare.outputs.version }}
+            - **Deployed:** ${{ github.event.head_commit.timestamp }}
+            - **Active Slot:** ${{ needs.prepare.outputs.target_slot }}
+
+            ### Changes
+            See the [CHANGELOG](CHANGELOG.md) for detailed changes.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

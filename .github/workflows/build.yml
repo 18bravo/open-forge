@@ -1,0 +1,364 @@
+# =============================================================================
+# Build Workflow for Open Forge
+# =============================================================================
+# This workflow builds and pushes Docker images for all services:
+# - API (FastAPI)
+# - UI (Next.js)
+# - Dagster (Pipeline orchestration)
+# - Langflow (Custom components)
+#
+# Images are pushed to GitHub Container Registry (ghcr.io) with:
+# - Semantic versioning tags
+# - Commit SHA tags
+# - Latest tag for main branch
+# =============================================================================
+
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'packages/**'
+      - 'infrastructure/docker/**'
+      - '.github/workflows/build.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/**'
+      - 'infrastructure/docker/**'
+      - '.github/workflows/build.yml'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        default: false
+        type: boolean
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/open-forge
+
+jobs:
+  # ===========================================================================
+  # Prepare Build Matrix
+  # ===========================================================================
+  prepare:
+    name: Prepare Build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha_short: ${{ steps.sha.outputs.sha_short }}
+      push: ${{ steps.push.outputs.push }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Get short SHA
+        id: sha
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Determine if push
+        id: push
+        run: |
+          PUSH="false"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            PUSH="true"
+          elif [[ "${{ github.event.inputs.push_images }}" == "true" ]]; then
+            PUSH="true"
+          fi
+          echo "push=${PUSH}" >> $GITHUB_OUTPUT
+
+  # ===========================================================================
+  # Build API Image (FastAPI)
+  # ===========================================================================
+  build-api:
+    name: Build API Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.api
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_SHA=${{ needs.prepare.outputs.sha_short }}
+
+  # ===========================================================================
+  # Build UI Image (Next.js)
+  # ===========================================================================
+  build-ui:
+    name: Build UI Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-ui
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.ui
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_SHA=${{ needs.prepare.outputs.sha_short }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+
+  # ===========================================================================
+  # Build Dagster Image
+  # ===========================================================================
+  build-dagster:
+    name: Build Dagster Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-dagster
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Dagster image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.dagster
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_SHA=${{ needs.prepare.outputs.sha_short }}
+
+  # ===========================================================================
+  # Build Langflow Image
+  # ===========================================================================
+  build-langflow:
+    name: Build Langflow Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-langflow
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Langflow image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.langflow
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.prepare.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            BUILD_SHA=${{ needs.prepare.outputs.sha_short }}
+
+  # ===========================================================================
+  # Build Summary
+  # ===========================================================================
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-api
+      - build-ui
+      - build-dagster
+      - build-langflow
+    if: always()
+
+    steps:
+      - name: Build summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API | ${{ needs.build-api.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI | ${{ needs.build-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dagster | ${{ needs.build-dagster.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Langflow | ${{ needs.build-langflow.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA:** ${{ needs.prepare.outputs.sha_short }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Pushed:** ${{ needs.prepare.outputs.push }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check build status
+        if: |
+          needs.build-api.result == 'failure' ||
+          needs.build-ui.result == 'failure' ||
+          needs.build-dagster.result == 'failure' ||
+          needs.build-langflow.result == 'failure'
+        run: exit 1

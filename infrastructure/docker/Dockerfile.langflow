@@ -1,0 +1,181 @@
+# =============================================================================
+# Dockerfile for Open Forge Langflow (Custom Components)
+# =============================================================================
+# Multi-stage build for Langflow with custom Open Forge components:
+# - Stage 1: Builder - Install dependencies and prepare components
+# - Stage 2: Production - Langflow with custom components loaded
+#
+# Build args:
+#   VERSION - Application version (default: 0.0.0-dev)
+#   BUILD_SHA - Git commit SHA for traceability
+#   LANGFLOW_VERSION - Langflow base version (default: latest)
+#
+# This image extends the official Langflow image with Open Forge custom
+# components for agents, tools, and memory integrations.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Prepare custom components
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim AS builder
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+
+# Set working directory
+WORKDIR /build
+
+# Copy main project dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir -e . || true
+
+# Copy the packages needed for Langflow components
+COPY packages/core/ packages/core/
+COPY packages/agent-framework/ packages/agent-framework/
+COPY packages/ontology/ packages/ontology/
+COPY packages/connectors/ packages/connectors/
+COPY packages/agents/ packages/agents/
+COPY packages/langflow-components/ packages/langflow-components/
+
+# Install the component packages
+RUN pip install --no-cache-dir \
+    -e packages/core \
+    -e packages/agent-framework \
+    -e packages/ontology \
+    -e packages/connectors \
+    -e packages/agents \
+    || true
+
+# -----------------------------------------------------------------------------
+# Stage 2: Production - Langflow with custom components
+# -----------------------------------------------------------------------------
+FROM langflowai/langflow:latest AS production
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Labels for container metadata
+LABEL org.opencontainers.image.title="Open Forge Langflow"
+LABEL org.opencontainers.image.description="Langflow with Open Forge custom components"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/18bravo/open-forge"
+LABEL org.opencontainers.image.vendor="18bravo"
+
+# Switch to root for installation
+USER root
+
+# Install additional runtime dependencies if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment extras from builder
+COPY --from=builder /opt/venv/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages/
+
+# Copy custom components
+COPY packages/langflow-components/ /app/custom_components/open_forge/
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LANGFLOW_COMPONENTS_PATH=/app/custom_components \
+    LANGFLOW_AUTO_LOGIN=false \
+    LANGFLOW_SUPERUSER_PASSWORD_PLACEHOLDER=changeme \
+    APP_VERSION=${VERSION} \
+    BUILD_SHA=${BUILD_SHA}
+
+# Copy startup script
+COPY <<'EOF' /app/start.sh
+#!/bin/bash
+set -e
+
+echo "Starting Open Forge Langflow..."
+echo "Version: ${APP_VERSION:-unknown}"
+echo "Build SHA: ${BUILD_SHA:-unknown}"
+echo "Components Path: ${LANGFLOW_COMPONENTS_PATH}"
+
+# List custom components
+echo "Custom components available:"
+ls -la /app/custom_components/open_forge/ || echo "No custom components found"
+
+# Start Langflow
+exec langflow run --host 0.0.0.0 --port 7860 "$@"
+EOF
+
+RUN chmod +x /app/start.sh
+
+# Create non-root user if not exists and set permissions
+RUN if ! id -u langflow > /dev/null 2>&1; then \
+        groupadd --gid 1000 langflow && \
+        useradd --uid 1000 --gid langflow --shell /bin/bash --create-home langflow; \
+    fi && \
+    chown -R langflow:langflow /app
+
+# Switch to non-root user
+USER langflow
+
+# Expose Langflow port
+EXPOSE 7860
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7860/health || exit 1
+
+# Run Langflow with custom components
+CMD ["/app/start.sh"]
+
+# -----------------------------------------------------------------------------
+# Stage 3: Development - Full development environment
+# -----------------------------------------------------------------------------
+FROM langflowai/langflow:latest AS development
+
+USER root
+
+# Install development tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment extras from builder
+COPY --from=builder /opt/venv/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages/
+
+# Copy custom components
+COPY packages/langflow-components/ /app/custom_components/open_forge/
+
+# Set development environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LANGFLOW_COMPONENTS_PATH=/app/custom_components \
+    LANGFLOW_AUTO_LOGIN=true \
+    LANGFLOW_DEV=true \
+    DEBUG=1
+
+# Set permissions
+RUN chown -R langflow:langflow /app 2>/dev/null || true
+
+USER langflow
+
+# Expose ports
+EXPOSE 7860
+
+# Development command
+CMD ["langflow", "run", "--host", "0.0.0.0", "--port", "7860", "--dev"]

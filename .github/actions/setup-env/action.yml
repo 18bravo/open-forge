@@ -1,0 +1,187 @@
+# =============================================================================
+# Reusable Setup Environment Action for Open Forge
+# =============================================================================
+# This composite action sets up the development environment with:
+# - Python installation and caching
+# - Node.js installation and caching
+# - Dependency installation
+# - Cache management for pip, npm, and other tools
+# =============================================================================
+
+name: 'Setup Environment'
+description: 'Sets up Python, Node.js, and installs dependencies with caching'
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '20'
+
+  install-python-deps:
+    description: 'Whether to install Python dependencies'
+    required: false
+    default: 'true'
+
+  install-node-deps:
+    description: 'Whether to install Node.js dependencies'
+    required: false
+    default: 'true'
+
+  python-extras:
+    description: 'Python extras to install (comma-separated, e.g., dev,test)'
+    required: false
+    default: 'dev'
+
+  working-directory:
+    description: 'Working directory for Node.js commands'
+    required: false
+    default: 'packages/ui'
+
+outputs:
+  python-version:
+    description: 'The Python version that was set up'
+    value: ${{ steps.setup-python.outputs.python-version }}
+
+  node-version:
+    description: 'The Node.js version that was set up'
+    value: ${{ steps.setup-node.outputs.node-version }}
+
+  cache-hit-pip:
+    description: 'Whether the pip cache was hit'
+    value: ${{ steps.cache-pip.outputs.cache-hit }}
+
+  cache-hit-npm:
+    description: 'Whether the npm cache was hit'
+    value: ${{ steps.cache-npm.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    # =========================================================================
+    # Python Setup
+    # =========================================================================
+    - name: Set up Python ${{ inputs.python-version }}
+      id: setup-python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Get pip cache directory
+      id: pip-cache-dir
+      shell: bash
+      run: |
+        echo "dir=$(pip cache dir)" >> $GITHUB_OUTPUT
+
+    - name: Cache pip dependencies
+      id: cache-pip
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.pip-cache-dir.outputs.dir }}
+          ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ inputs.python-version }}-
+          ${{ runner.os }}-pip-
+
+    - name: Upgrade pip
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip wheel setuptools
+
+    - name: Install Python dependencies
+      if: inputs.install-python-deps == 'true'
+      shell: bash
+      run: |
+        EXTRAS="${{ inputs.python-extras }}"
+        if [ -n "$EXTRAS" ]; then
+          pip install -e ".[$EXTRAS]"
+        else
+          pip install -e .
+        fi
+
+    # =========================================================================
+    # Node.js Setup
+    # =========================================================================
+    - name: Set up Node.js ${{ inputs.node-version }}
+      id: setup-node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Get npm cache directory
+      id: npm-cache-dir
+      shell: bash
+      run: |
+        echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+    - name: Cache npm dependencies
+      id: cache-npm
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.npm-cache-dir.outputs.dir }}
+          ${{ inputs.working-directory }}/node_modules
+        key: ${{ runner.os }}-npm-${{ inputs.node-version }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
+        restore-keys: |
+          ${{ runner.os }}-npm-${{ inputs.node-version }}-
+          ${{ runner.os }}-npm-
+
+    - name: Install Node.js dependencies
+      if: inputs.install-node-deps == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        npm ci --prefer-offline
+
+    # =========================================================================
+    # Additional Tool Caches
+    # =========================================================================
+    - name: Cache pre-commit hooks
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pre-commit-
+
+    - name: Cache mypy
+      uses: actions/cache@v4
+      with:
+        path: .mypy_cache
+        key: ${{ runner.os }}-mypy-${{ inputs.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-mypy-${{ inputs.python-version }}-
+          ${{ runner.os }}-mypy-
+
+    - name: Cache ruff
+      uses: actions/cache@v4
+      with:
+        path: .ruff_cache
+        key: ${{ runner.os }}-ruff-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-ruff-
+
+    # =========================================================================
+    # Environment Info
+    # =========================================================================
+    - name: Print environment info
+      shell: bash
+      run: |
+        echo "## Environment Setup Complete" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Tool | Version |" >> $GITHUB_STEP_SUMMARY
+        echo "|------|---------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Python | $(python --version) |" >> $GITHUB_STEP_SUMMARY
+        echo "| pip | $(pip --version | cut -d' ' -f2) |" >> $GITHUB_STEP_SUMMARY
+        echo "| Node.js | $(node --version) |" >> $GITHUB_STEP_SUMMARY
+        echo "| npm | $(npm --version) |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Cache Status:**" >> $GITHUB_STEP_SUMMARY
+        echo "- pip cache hit: ${{ steps.cache-pip.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+        echo "- npm cache hit: ${{ steps.cache-npm.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY

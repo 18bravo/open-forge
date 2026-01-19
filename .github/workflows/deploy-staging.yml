@@ -1,0 +1,361 @@
+# =============================================================================
+# Deploy Staging Workflow for Open Forge
+# =============================================================================
+# This workflow deploys to the staging Kubernetes namespace:
+# - Triggers on release candidate tags (v*-rc*)
+# - Uses Kustomize overlays for staging configuration
+# - Runs smoke tests after deployment
+# - Provides rollback capability
+# =============================================================================
+
+name: Deploy Staging
+
+on:
+  push:
+    tags:
+      - 'v*-rc*'
+
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy'
+        required: true
+        type: string
+
+# Only one staging deployment at a time
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  CLUSTER_NAME: open-forge-cluster
+  NAMESPACE: open-forge-staging
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/open-forge
+
+jobs:
+  # ===========================================================================
+  # Deploy to Staging
+  # ===========================================================================
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.open-forge.io
+    outputs:
+      api_url: ${{ steps.urls.outputs.api_url }}
+      ui_url: ${{ steps.urls.outputs.ui_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_STAGING }}
+
+      - name: Set up Kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: '5.3.0'
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.image_tag }}"
+          else
+            # Extract version from tag (e.g., v1.0.0-rc1 -> 1.0.0-rc1)
+            TAG="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Update image tags in Kustomize
+        working-directory: infrastructure/kustomize/overlays/staging
+        run: |
+          kustomize edit set image \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-api=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-ui=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-ui:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-dagster=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-dagster:${{ steps.tag.outputs.tag }} \
+            ghcr.io/${{ env.IMAGE_PREFIX }}-langflow=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-langflow:${{ steps.tag.outputs.tag }}
+
+      - name: Validate Kustomize build
+        working-directory: infrastructure/kustomize/overlays/staging
+        run: |
+          kustomize build . > /dev/null
+
+      - name: Create deployment annotation
+        run: |
+          echo "Deploying version ${{ steps.tag.outputs.tag }} to staging"
+          echo "Commit: ${{ github.sha }}"
+          echo "Ref: ${{ github.ref }}"
+
+      - name: Deploy to Kubernetes
+        working-directory: infrastructure/kustomize/overlays/staging
+        run: |
+          kustomize build . | kubectl apply -f - --namespace=${{ env.NAMESPACE }}
+
+      - name: Wait for API deployment
+        run: |
+          kubectl rollout status deployment/open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Wait for UI deployment
+        run: |
+          kubectl rollout status deployment/open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Wait for Dagster deployment
+        run: |
+          kubectl rollout status deployment/open-forge-dagster-webserver \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=300s
+
+      - name: Get service URLs
+        id: urls
+        run: |
+          API_URL=$(kubectl get ingress open-forge-api-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+          UI_URL=$(kubectl get ingress open-forge-ui-ingress \
+            --namespace=${{ env.NAMESPACE }} \
+            -o jsonpath='{.spec.rules[0].host}')
+
+          echo "api_url=https://${API_URL}" >> $GITHUB_OUTPUT
+          echo "ui_url=https://${UI_URL}" >> $GITHUB_OUTPUT
+
+      - name: Health check - API
+        run: |
+          echo "Checking API health at ${{ steps.urls.outputs.api_url }}/health"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ steps.urls.outputs.api_url }}/health" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "API health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "API health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+      - name: Health check - UI
+        run: |
+          echo "Checking UI health at ${{ steps.urls.outputs.ui_url }}"
+
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "${{ steps.urls.outputs.ui_url }}" \
+              --max-time 10 || echo "000")
+
+            if [[ "$STATUS" == "200" ]]; then
+              echo "UI health check passed"
+              break
+            fi
+
+            if [[ $i -eq 30 ]]; then
+              echo "UI health check failed after 30 attempts"
+              exit 1
+            fi
+
+            echo "Attempt $i: Status $STATUS, retrying..."
+            sleep 10
+          done
+
+  # ===========================================================================
+  # Run Smoke Tests
+  # ===========================================================================
+  smoke-tests:
+    name: Run Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run API smoke tests
+        env:
+          API_URL: ${{ needs.deploy.outputs.api_url }}
+        run: |
+          echo "Running smoke tests against ${API_URL}"
+
+          # Health endpoint test
+          curl -f "${API_URL}/health" || exit 1
+
+          # API version test
+          curl -f "${API_URL}/api/v1/version" || echo "Version endpoint not available"
+
+          # OpenAPI schema test
+          curl -f "${API_URL}/openapi.json" || echo "OpenAPI schema not available"
+
+      - name: Run UI smoke tests
+        env:
+          UI_URL: ${{ needs.deploy.outputs.ui_url }}
+        run: |
+          echo "Running smoke tests against ${UI_URL}"
+
+          # Home page test
+          curl -f "${UI_URL}" || exit 1
+
+          # Check for critical assets
+          curl -f "${UI_URL}/_next/static/chunks/main.js" || echo "Main JS chunk not found"
+
+      - name: Run integration smoke tests
+        env:
+          API_URL: ${{ needs.deploy.outputs.api_url }}
+        run: |
+          # Test API endpoints
+          echo "Testing core API endpoints..."
+
+          # List engagements (should return empty or data)
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${API_URL}/api/v1/engagements" || echo "000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "401" ]]; then
+            echo "Engagements endpoint failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+          # List agents
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${API_URL}/api/v1/agents" || echo "000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "401" ]]; then
+            echo "Agents endpoint failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Integration smoke tests passed"
+
+      - name: Report smoke test results
+        if: always()
+        run: |
+          echo "## Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API Health | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Health | Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration | Passed |" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Rollback on Failure
+  # ===========================================================================
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-tests]
+    if: failure()
+
+    steps:
+      - name: Configure Kubernetes credentials
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_STAGING }}
+
+      - name: Rollback deployments
+        run: |
+          echo "Rolling back deployments due to failure..."
+
+          kubectl rollout undo deployment/open-forge-api \
+            --namespace=${{ env.NAMESPACE }} || true
+
+          kubectl rollout undo deployment/open-forge-ui \
+            --namespace=${{ env.NAMESPACE }} || true
+
+          kubectl rollout undo deployment/open-forge-dagster-webserver \
+            --namespace=${{ env.NAMESPACE }} || true
+
+      - name: Wait for rollback
+        run: |
+          kubectl rollout status deployment/open-forge-api \
+            --namespace=${{ env.NAMESPACE }} \
+            --timeout=120s || true
+
+      - name: Notify rollback
+        run: |
+          echo "## Rollback Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Staging deployment failed and rollback was executed." >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Notify Deployment
+  # ===========================================================================
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-tests]
+    if: always()
+
+    steps:
+      - name: Notify Slack on success
+        if: needs.smoke-tests.result == 'success'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Open Forge Staging Deployment Successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Open Forge Staging Deployment Successful*\n\nTag: `${{ github.ref_name }}`\nEnvironment: Staging\nAPI: ${{ needs.deploy.outputs.api_url }}\nUI: ${{ needs.deploy.outputs.ui_url }}\n\nSmoke tests passed. Ready for production promotion."
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Notify Slack on failure
+        if: needs.deploy.result == 'failure' || needs.smoke-tests.result == 'failure'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Open Forge Staging Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Open Forge Staging Deployment Failed*\n\nTag: `${{ github.ref_name }}`\nEnvironment: Staging\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

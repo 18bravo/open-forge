@@ -1,0 +1,296 @@
+# Agent Alerting Rules for Open Forge
+# LangFlow agent and task execution monitoring
+
+groups:
+  - name: agent.tasks
+    interval: 30s
+    rules:
+      - alert: AgentTaskFailureRateHigh
+        expr: |
+          (
+            sum(rate(agent_task_total{status="failed"}[15m]))
+            /
+            sum(rate(agent_task_total[15m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: agent
+          team: ml
+        annotations:
+          summary: "High agent task failure rate"
+          description: "Agent task failure rate is {{ $value | humanizePercentage }} over the last 15 minutes, exceeding 10% threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-task-failures"
+          dashboard_url: "https://grafana.open-forge.io/d/agent-execution"
+
+      - alert: AgentTaskFailureRateWarning
+        expr: |
+          (
+            sum(rate(agent_task_total{status="failed"}[15m]))
+            /
+            sum(rate(agent_task_total[15m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Elevated agent task failure rate"
+          description: "Agent task failure rate is {{ $value | humanizePercentage }} over the last 15 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-task-failures"
+
+      - alert: AgentTasksStuck
+        expr: |
+          sum(agent_task_running{status="running"}) > 0
+          and
+          sum(changes(agent_task_running{status="running"}[30m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Agent tasks appear stuck"
+          description: "Running agent tasks have not changed in 30 minutes, possible deadlock."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-tasks-stuck"
+
+      - alert: AgentLongRunningTask
+        expr: |
+          (time() - agent_task_start_time_seconds{status="running"}) > 600
+        for: 1m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Long-running agent task detected"
+          description: "Agent task {{ $labels.task_id }} of type {{ $labels.agent_type }} has been running for {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-long-running-task"
+
+      - alert: AgentLongRunningTaskCritical
+        expr: |
+          (time() - agent_task_start_time_seconds{status="running"}) > 1800
+        for: 1m
+        labels:
+          severity: critical
+          service: agent
+          team: ml
+        annotations:
+          summary: "Critical: Agent task running too long"
+          description: "Agent task {{ $labels.task_id }} has been running for {{ $value | humanizeDuration }} (>30min), immediate attention required."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-long-running-task"
+
+  - name: agent.resources
+    interval: 30s
+    rules:
+      - alert: AgentHighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{container=~"agent.*", namespace="open-forge"}
+            /
+            container_spec_memory_limit_bytes{container=~"agent.*", namespace="open-forge"}
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Agent memory usage high"
+          description: "Agent container {{ $labels.container }} memory usage is {{ $value | humanizePercentage }} of limit on pod {{ $labels.pod }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-high-memory"
+
+      - alert: AgentMemorySpike
+        expr: |
+          (
+            container_memory_working_set_bytes{container=~"agent.*", namespace="open-forge"}
+            -
+            container_memory_working_set_bytes{container=~"agent.*", namespace="open-forge"} offset 5m
+          )
+          /
+          container_memory_working_set_bytes{container=~"agent.*", namespace="open-forge"} offset 5m
+          > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Agent memory spike detected"
+          description: "Agent container {{ $labels.container }} memory increased by {{ $value | humanizePercentage }} in the last 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-memory-spike"
+
+      - alert: AgentHighCPUUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{container=~"agent.*", namespace="open-forge"}[5m])) by (pod, container)
+            /
+            sum(container_spec_cpu_quota{container=~"agent.*", namespace="open-forge"} / container_spec_cpu_period{container=~"agent.*", namespace="open-forge"}) by (pod, container)
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "Agent CPU usage high"
+          description: "Agent container {{ $labels.container }} CPU usage is {{ $value | humanizePercentage }} of limit on pod {{ $labels.pod }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-high-cpu"
+
+      - alert: AgentCPUSpike
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{container=~"agent.*", namespace="open-forge"}[2m])
+            -
+            rate(container_cpu_usage_seconds_total{container=~"agent.*", namespace="open-forge"}[2m] offset 5m)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: info
+          service: agent
+          team: ml
+        annotations:
+          summary: "Agent CPU spike detected"
+          description: "Agent container {{ $labels.container }} CPU usage spiked significantly in the last 5 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/agent-cpu-spike"
+
+  - name: agent.llm
+    interval: 30s
+    rules:
+      - alert: LLMAPIErrors
+        expr: |
+          sum(rate(llm_api_requests_total{status="error"}[5m])) by (provider) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "LLM API errors detected"
+          description: "LLM provider {{ $labels.provider }} is returning errors at {{ $value | humanize }} per second."
+          runbook_url: "https://docs.open-forge.io/runbooks/llm-api-errors"
+
+      - alert: LLMAPIErrorRateHigh
+        expr: |
+          (
+            sum(rate(llm_api_requests_total{status="error"}[5m])) by (provider)
+            /
+            sum(rate(llm_api_requests_total[5m])) by (provider)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: agent
+          team: ml
+        annotations:
+          summary: "High LLM API error rate"
+          description: "LLM provider {{ $labels.provider }} error rate is {{ $value | humanizePercentage }}, exceeding 10% threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/llm-api-errors"
+
+      - alert: LLMAPILatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(llm_api_request_duration_seconds_bucket[5m])) by (le, provider, model)
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "High LLM API latency"
+          description: "LLM {{ $labels.provider }}/{{ $labels.model }} P95 latency is {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/llm-api-latency"
+
+      - alert: LLMTokenUsageHigh
+        expr: |
+          sum(increase(llm_tokens_total[1h])) > 1000000
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "High LLM token usage"
+          description: "LLM token usage is {{ $value | humanize }} tokens in the last hour."
+          runbook_url: "https://docs.open-forge.io/runbooks/llm-token-usage"
+
+      - alert: LLMRateLimited
+        expr: |
+          sum(rate(llm_api_requests_total{status="rate_limited"}[5m])) by (provider) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          service: agent
+          team: ml
+        annotations:
+          summary: "LLM API rate limiting detected"
+          description: "LLM provider {{ $labels.provider }} is rate limiting requests."
+          runbook_url: "https://docs.open-forge.io/runbooks/llm-rate-limited"
+
+  - name: agent.approval-queue
+    interval: 30s
+    rules:
+      - alert: HumanApprovalQueueBacklog
+        expr: |
+          agent_human_approval_queue_depth > 10
+        for: 15m
+        labels:
+          severity: warning
+          service: agent
+          team: ops
+        annotations:
+          summary: "Human approval queue backlog"
+          description: "Human approval queue has {{ $value }} pending items for more than 15 minutes."
+          runbook_url: "https://docs.open-forge.io/runbooks/approval-queue-backlog"
+
+      - alert: HumanApprovalQueueCritical
+        expr: |
+          agent_human_approval_queue_depth > 50
+        for: 5m
+        labels:
+          severity: critical
+          service: agent
+          team: ops
+        annotations:
+          summary: "Critical human approval queue backlog"
+          description: "Human approval queue has {{ $value }} pending items, blocking agent operations."
+          runbook_url: "https://docs.open-forge.io/runbooks/approval-queue-backlog"
+
+      - alert: HumanApprovalWaitTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(agent_human_approval_wait_seconds_bucket[1h])) by (le)
+          ) > 3600
+        for: 5m
+        labels:
+          severity: warning
+          service: agent
+          team: ops
+        annotations:
+          summary: "Long human approval wait times"
+          description: "P95 human approval wait time is {{ $value | humanizeDuration }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/approval-wait-time"
+
+  # Recording rules for efficient querying
+  - name: agent.recording
+    interval: 30s
+    rules:
+      - record: agent:task_failure_rate:15m
+        expr: |
+          sum(rate(agent_task_total{status="failed"}[15m]))
+          /
+          sum(rate(agent_task_total[15m]))
+
+      - record: agent:task_duration_seconds:p50
+        expr: histogram_quantile(0.50, sum(rate(agent_task_duration_seconds_bucket[5m])) by (le, agent_type))
+
+      - record: agent:task_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(agent_task_duration_seconds_bucket[5m])) by (le, agent_type))
+
+      - record: agent:llm_tokens:rate1h
+        expr: sum(rate(llm_tokens_total[1h])) by (provider, model, token_type)
+
+      - record: agent:tasks_by_status
+        expr: sum(agent_task_total) by (status, agent_type)

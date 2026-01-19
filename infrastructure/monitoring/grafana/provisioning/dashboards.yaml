@@ -1,0 +1,42 @@
+# Grafana Dashboard Provisioning Configuration
+# This file tells Grafana where to find dashboard JSON files
+
+apiVersion: 1
+
+providers:
+  - name: 'Open Forge Dashboards'
+    orgId: 1
+    folder: 'Open Forge'
+    folderUid: 'open-forge'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/open-forge
+      foldersFromFilesStructure: false
+
+  # Optional: Additional dashboard folders for different teams
+  - name: 'Infrastructure Dashboards'
+    orgId: 1
+    folder: 'Infrastructure'
+    folderUid: 'infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+      foldersFromFilesStructure: false
+
+  - name: 'SRE Dashboards'
+    orgId: 1
+    folder: 'SRE'
+    folderUid: 'sre'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/sre
+      foldersFromFilesStructure: false

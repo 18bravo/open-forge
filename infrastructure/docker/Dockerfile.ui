@@ -1,0 +1,132 @@
+# =============================================================================
+# Dockerfile for Open Forge UI (Next.js)
+# =============================================================================
+# Multi-stage build for optimized production image:
+# - Stage 1: Dependencies - Install npm packages
+# - Stage 2: Builder - Build Next.js application
+# - Stage 3: Production - Minimal runtime with standalone output
+#
+# Build args:
+#   VERSION - Application version (default: 0.0.0-dev)
+#   BUILD_SHA - Git commit SHA for traceability
+#   NEXT_PUBLIC_API_URL - API URL for client-side requests
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Dependencies - Install and cache npm packages
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS deps
+
+# Check https://github.com/nodejs/docker-node/tree/main#nodealpine
+# for understanding why libc6-compat might be needed
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy package files
+COPY packages/ui/package.json packages/ui/package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --prefer-offline
+
+# -----------------------------------------------------------------------------
+# Stage 2: Builder - Build the Next.js application
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY packages/ui/ ./
+
+# Set build-time environment variables
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_VERSION=${VERSION}
+ENV NEXT_PUBLIC_BUILD_SHA=${BUILD_SHA}
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build the application
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 3: Production - Minimal runtime image
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS production
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Labels for container metadata
+LABEL org.opencontainers.image.title="Open Forge UI"
+LABEL org.opencontainers.image.description="Next.js frontend for Open Forge"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/18bravo/open-forge"
+LABEL org.opencontainers.image.vendor="18bravo"
+
+WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+# Copy public assets
+COPY --from=builder /app/public ./public
+
+# Set up the standalone directory for output
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# Run the application
+CMD ["node", "server.js"]
+
+# -----------------------------------------------------------------------------
+# Stage 4: Development - Full development environment
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS development
+
+WORKDIR /app
+
+# Install dependencies
+COPY packages/ui/package.json packages/ui/package-lock.json* ./
+RUN npm ci
+
+# Copy source code
+COPY packages/ui/ ./
+
+# Set development environment
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Expose port
+EXPOSE 3000
+
+# Development command with hot reload
+CMD ["npm", "run", "dev"]

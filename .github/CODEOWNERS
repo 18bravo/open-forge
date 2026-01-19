@@ -1,0 +1,113 @@
+# =============================================================================
+# CODEOWNERS for Open Forge
+# =============================================================================
+# This file defines code ownership for the repository.
+# Each line is a file pattern followed by one or more owners.
+# Order is important; the last matching pattern takes precedence.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Default Owners (fallback for everything)
+# -----------------------------------------------------------------------------
+*                                   @18bravo/platform-team
+
+# -----------------------------------------------------------------------------
+# Documentation
+# -----------------------------------------------------------------------------
+docs/                               @18bravo/docs-team
+*.md                                @18bravo/docs-team
+LICENSE                             @18bravo/platform-team
+
+# -----------------------------------------------------------------------------
+# Core Package - Foundational utilities and shared code
+# -----------------------------------------------------------------------------
+packages/core/                      @18bravo/core-team
+packages/core/src/core/database/    @18bravo/data-team
+packages/core/src/core/messaging/   @18bravo/platform-team
+packages/core/src/core/storage/     @18bravo/data-team
+
+# -----------------------------------------------------------------------------
+# Agent Framework - Agent orchestration and management
+# -----------------------------------------------------------------------------
+packages/agent-framework/           @18bravo/ai-team
+packages/agents/                    @18bravo/ai-team
+
+# -----------------------------------------------------------------------------
+# Data Processing Packages
+# -----------------------------------------------------------------------------
+packages/ontology/                  @18bravo/data-team
+packages/connectors/                @18bravo/data-team
+packages/pipelines/                 @18bravo/data-team
+
+# -----------------------------------------------------------------------------
+# API Package - FastAPI backend
+# -----------------------------------------------------------------------------
+packages/api/                       @18bravo/backend-team
+packages/api/src/api/graphql/       @18bravo/backend-team
+
+# -----------------------------------------------------------------------------
+# MCP Server - Model Context Protocol
+# -----------------------------------------------------------------------------
+packages/mcp-server/                @18bravo/ai-team
+
+# -----------------------------------------------------------------------------
+# Langflow Components - Custom Langflow integrations
+# -----------------------------------------------------------------------------
+packages/langflow-components/       @18bravo/ai-team
+
+# -----------------------------------------------------------------------------
+# UI Package - Next.js frontend
+# -----------------------------------------------------------------------------
+packages/ui/                        @18bravo/frontend-team
+packages/ui/src/components/         @18bravo/frontend-team
+packages/ui/src/app/                @18bravo/frontend-team
+
+# -----------------------------------------------------------------------------
+# Human Interaction Package
+# -----------------------------------------------------------------------------
+packages/human-interaction/         @18bravo/product-team
+
+# -----------------------------------------------------------------------------
+# Infrastructure - Docker, Kubernetes, CI/CD
+# -----------------------------------------------------------------------------
+infrastructure/                     @18bravo/devops-team
+infrastructure/docker/              @18bravo/devops-team
+infrastructure/kubernetes/          @18bravo/devops-team
+infrastructure/kustomize/           @18bravo/devops-team
+infrastructure/helm/                @18bravo/devops-team
+
+# -----------------------------------------------------------------------------
+# GitHub Configuration
+# -----------------------------------------------------------------------------
+.github/                            @18bravo/devops-team
+.github/workflows/                  @18bravo/devops-team
+.github/CODEOWNERS                  @18bravo/platform-team
+
+# -----------------------------------------------------------------------------
+# Root Configuration Files
+# -----------------------------------------------------------------------------
+pyproject.toml                      @18bravo/platform-team
+Makefile                            @18bravo/platform-team
+.env.example                        @18bravo/devops-team
+
+# -----------------------------------------------------------------------------
+# Tests
+# -----------------------------------------------------------------------------
+tests/                              @18bravo/qa-team
+tests/integration/                  @18bravo/qa-team
+tests/e2e/                          @18bravo/qa-team
+packages/*/tests/                   @18bravo/qa-team
+
+# -----------------------------------------------------------------------------
+# Security-sensitive Files
+# -----------------------------------------------------------------------------
+.github/workflows/security-scan.yml @18bravo/security-team
+.github/dependabot.yml              @18bravo/security-team
+infrastructure/kubernetes/secrets.yaml @18bravo/security-team @18bravo/devops-team
+
+# -----------------------------------------------------------------------------
+# Contracts and Schemas
+# -----------------------------------------------------------------------------
+contracts/                          @18bravo/platform-team @18bravo/backend-team

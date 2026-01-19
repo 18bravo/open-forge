@@ -1,0 +1,256 @@
+# API Alerting Rules for Open Forge
+# FastAPI backend monitoring alerts
+
+groups:
+  - name: api.availability
+    interval: 30s
+    rules:
+      - alert: APIHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="open-forge-api", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="open-forge-api"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+          team: backend
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 5 minutes, exceeding the 5% threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-error-rate"
+          dashboard_url: "https://grafana.open-forge.io/d/api-performance"
+
+      - alert: APIHighErrorRateWarning
+        expr: |
+          (
+            sum(rate(http_requests_total{job="open-forge-api", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="open-forge-api"}[5m]))
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "Elevated API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 10 minutes, exceeding the 2% warning threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-error-rate"
+
+      - alert: APIServiceDown
+        expr: up{job="open-forge-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+          team: backend
+        annotations:
+          summary: "API service is down"
+          description: "API service {{ $labels.instance }} has been unreachable for more than 1 minute."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-service-down"
+
+      - alert: APILowAvailability
+        expr: |
+          avg_over_time(up{job="open-forge-api"}[1h]) < 0.99
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "API availability below SLO"
+          description: "API availability is {{ $value | humanizePercentage }} over the last hour, below 99% SLO target."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-low-availability"
+
+  - name: api.latency
+    interval: 30s
+    rules:
+      - alert: APIHighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: api
+          team: backend
+        annotations:
+          summary: "High API latency (P95 > 500ms)"
+          description: "95th percentile latency for endpoint {{ $labels.endpoint }} is {{ $value | humanizeDuration }}, exceeding 500ms threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-latency"
+          dashboard_url: "https://grafana.open-forge.io/d/api-performance"
+
+      - alert: APIHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "High API latency (P99 > 1s)"
+          description: "99th percentile latency for endpoint {{ $labels.endpoint }} is {{ $value | humanizeDuration }}, exceeding 1s threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-latency"
+
+      - alert: APISlowEndpoint
+        expr: |
+          histogram_quantile(0.50,
+            sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "Slow API endpoint detected"
+          description: "Median latency for endpoint {{ $labels.endpoint }} is {{ $value | humanizeDuration }}, exceeding 200ms threshold."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-slow-endpoint"
+
+  - name: api.rate-limiting
+    interval: 30s
+    rules:
+      - alert: APIRateLimitExceeded
+        expr: |
+          sum(rate(http_requests_total{job="open-forge-api", status="429"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "High rate of rate-limited requests"
+          description: "Rate limit responses (429) are occurring at {{ $value | humanize }} requests/second."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-rate-limit"
+
+      - alert: APIRateLimitPerClient
+        expr: |
+          sum(rate(http_requests_total{job="open-forge-api", status="429"}[5m])) by (client_id) > 5
+        for: 5m
+        labels:
+          severity: info
+          service: api
+          team: backend
+        annotations:
+          summary: "Client hitting rate limits"
+          description: "Client {{ $labels.client_id }} is being rate limited at {{ $value | humanize }} requests/second."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-rate-limit"
+
+  - name: api.resources
+    interval: 30s
+    rules:
+      - alert: APIHighMemoryUsage
+        expr: |
+          (
+            container_memory_working_set_bytes{container="api", namespace="open-forge"}
+            /
+            container_spec_memory_limit_bytes{container="api", namespace="open-forge"}
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "API memory usage high"
+          description: "API container memory usage is {{ $value | humanizePercentage }} of limit on pod {{ $labels.pod }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-memory"
+
+      - alert: APIHighCPUUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{container="api", namespace="open-forge"}[5m])) by (pod)
+            /
+            sum(container_spec_cpu_quota{container="api", namespace="open-forge"} / container_spec_cpu_period{container="api", namespace="open-forge"}) by (pod)
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "API CPU usage high"
+          description: "API container CPU usage is {{ $value | humanizePercentage }} of limit on pod {{ $labels.pod }}."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-high-cpu"
+
+      - alert: APITooManyConnections
+        expr: |
+          sum(http_connections_active{job="open-forge-api"}) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: backend
+        annotations:
+          summary: "High number of active connections"
+          description: "API has {{ $value }} active connections, approaching capacity limits."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-connection-limit"
+
+  - name: api.authentication
+    interval: 30s
+    rules:
+      - alert: APIHighAuthFailureRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="open-forge-api", status="401"}[5m]))
+            /
+            sum(rate(http_requests_total{job="open-forge-api"}[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value | humanizePercentage }} of requests are failing authentication, possible security concern."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-auth-failures"
+
+      - alert: APIHighForbiddenRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="open-forge-api", status="403"}[5m]))
+            /
+            sum(rate(http_requests_total{job="open-forge-api"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          team: security
+        annotations:
+          summary: "High forbidden request rate"
+          description: "{{ $value | humanizePercentage }} of requests are receiving 403 responses."
+          runbook_url: "https://docs.open-forge.io/runbooks/api-forbidden-requests"
+
+  # Recording rules for efficient querying
+  - name: api.recording
+    interval: 30s
+    rules:
+      - record: api:http_requests:rate5m
+        expr: sum(rate(http_requests_total{job="open-forge-api"}[5m])) by (endpoint, method, status)
+
+      - record: api:http_request_duration_seconds:p50
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint))
+
+      - record: api:http_request_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint))
+
+      - record: api:http_request_duration_seconds:p99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job="open-forge-api"}[5m])) by (le, endpoint))
+
+      - record: api:error_rate:5m
+        expr: |
+          sum(rate(http_requests_total{job="open-forge-api", status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total{job="open-forge-api"}[5m]))
+
+      - record: api:availability:1h
+        expr: avg_over_time(up{job="open-forge-api"}[1h])

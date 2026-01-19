@@ -1,0 +1,375 @@
+# Prometheus Instance for Open Forge
+# This creates the actual Prometheus server managed by the operator
+
+---
+# ServiceAccount for Prometheus
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: open-forge
+
+---
+# ClusterRole for Prometheus to scrape metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+
+---
+# ClusterRoleBinding for Prometheus
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: open-forge
+
+---
+# ConfigMap for additional Prometheus configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-additional-config
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+data:
+  additional-scrape-configs.yaml: |
+    # Additional scrape configs can be added here
+    # These are merged with ServiceMonitor-discovered configs
+
+---
+# Prometheus Custom Resource
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: main
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/instance: main
+    app.kubernetes.io/part-of: open-forge
+    prometheus: main
+spec:
+  # Version and image
+  version: v2.48.0
+  image: quay.io/prometheus/prometheus:v2.48.0
+
+  # Service account
+  serviceAccountName: prometheus
+
+  # Replicas for HA
+  replicas: 2
+
+  # Retention settings
+  retention: 30d
+  retentionSize: 40GB
+
+  # Resource requirements
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  # Storage configuration
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: standard
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Gi
+
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+
+  # Service monitor selector - select all ServiceMonitors with label prometheus=main
+  serviceMonitorSelector:
+    matchLabels:
+      prometheus: main
+
+  # Service monitor namespace selector - select from open-forge and monitoring namespaces
+  serviceMonitorNamespaceSelector:
+    matchNames:
+      - open-forge
+      - monitoring
+
+  # Pod monitor selector
+  podMonitorSelector:
+    matchLabels:
+      prometheus: main
+
+  podMonitorNamespaceSelector:
+    matchNames:
+      - open-forge
+      - monitoring
+
+  # Probe selector
+  probeSelector:
+    matchLabels:
+      prometheus: main
+
+  probeNamespaceSelector:
+    matchNames:
+      - open-forge
+
+  # Rule selector - select all PrometheusRules with label prometheus=main
+  ruleSelector:
+    matchLabels:
+      prometheus: main
+
+  ruleNamespaceSelector:
+    matchNames:
+      - open-forge
+      - monitoring
+
+  # Alertmanager configuration
+  alerting:
+    alertmanagers:
+      - namespace: open-forge
+        name: alertmanager-main
+        port: web
+        scheme: http
+        pathPrefix: /
+        apiVersion: v2
+
+  # External labels for federation
+  externalLabels:
+    cluster: open-forge
+    environment: production
+
+  # Enable admin API for debugging (disable in production if needed)
+  enableAdminAPI: false
+
+  # Enable features
+  enableFeatures:
+    - exemplar-storage
+    - memory-snapshot-on-shutdown
+
+  # Web configuration
+  web:
+    pageTitle: "Open Forge Prometheus"
+
+  # Pod metadata
+  podMetadata:
+    labels:
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/instance: main
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+
+  # Affinity for spreading replicas
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: prometheus
+                app.kubernetes.io/instance: main
+            topologyKey: kubernetes.io/hostname
+
+  # Node selector
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  # Tolerations
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+  # Additional volumes for rules
+  additionalScrapeConfigs:
+    name: prometheus-additional-config
+    key: additional-scrape-configs.yaml
+
+---
+# Service for Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-operated
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+    operated-prometheus: "true"
+spec:
+  ports:
+    - name: web
+      port: 9090
+      targetPort: web
+    - name: reloader-web
+      port: 8080
+      targetPort: reloader-web
+  selector:
+    app.kubernetes.io/name: prometheus
+  sessionAffinity: ClientIP
+
+---
+# Ingress for Prometheus (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Prometheus Authentication"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: prometheus.open-forge.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-operated
+                port:
+                  number: 9090
+  tls:
+    - hosts:
+        - prometheus.open-forge.io
+      secretName: prometheus-tls
+
+---
+# PrometheusRule for Prometheus self-monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-self-monitoring
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: prometheus
+    prometheus: main
+    role: alert-rules
+spec:
+  groups:
+    - name: prometheus
+      rules:
+        - alert: PrometheusTargetMissing
+          expr: up == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus target is missing"
+            description: "A Prometheus target has been missing for more than 5 minutes."
+
+        - alert: PrometheusJobMissing
+          expr: absent(up{job="prometheus"})
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus job is missing"
+            description: "The Prometheus job is missing."
+
+        - alert: PrometheusConfigurationReloadFailure
+          expr: prometheus_config_last_reload_successful != 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus configuration reload failure"
+            description: "Prometheus configuration reload has failed."
+
+        - alert: PrometheusTooManyRestarts
+          expr: changes(process_start_time_seconds{job="prometheus"}[15m]) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus too many restarts"
+            description: "Prometheus has restarted more than twice in the last 15 minutes."
+
+        - alert: PrometheusNotConnectedToAlertmanager
+          expr: prometheus_notifications_alertmanagers_discovered < 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus not connected to Alertmanager"
+            description: "Prometheus cannot reach the Alertmanager."
+
+        - alert: PrometheusRuleEvaluationFailures
+          expr: increase(prometheus_rule_evaluation_failures_total[3m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus rule evaluation failures"
+            description: "Prometheus has {{ $value }} rule evaluation failures."
+
+        - alert: PrometheusRuleEvaluationSlow
+          expr: prometheus_rule_group_last_duration_seconds > prometheus_rule_group_interval_seconds
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus rule evaluation is slow"
+            description: "Prometheus rule evaluation is taking longer than the evaluation interval."
+
+        - alert: PrometheusNotIngestingSamples
+          expr: rate(prometheus_tsdb_head_samples_appended_total[5m]) <= 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus is not ingesting samples"
+            description: "Prometheus is not ingesting any samples."
+
+        - alert: PrometheusTSDBCompactionsFailed
+          expr: increase(prometheus_tsdb_compactions_failed_total[1h]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Prometheus TSDB compactions failed"
+            description: "Prometheus has {{ $value }} TSDB compaction failures."

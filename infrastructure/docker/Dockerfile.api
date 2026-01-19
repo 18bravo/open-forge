@@ -1,0 +1,161 @@
+# =============================================================================
+# Dockerfile for Open Forge API (FastAPI)
+# =============================================================================
+# Multi-stage build for optimized production image:
+# - Stage 1: Build dependencies with build tools
+# - Stage 2: Production runtime with minimal footprint
+#
+# Build args:
+#   VERSION - Application version (default: 0.0.0-dev)
+#   BUILD_SHA - Git commit SHA for traceability
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Install dependencies and build wheels
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim AS builder
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install build tools
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+
+# Set working directory
+WORKDIR /build
+
+# Copy only dependency files first (better cache utilization)
+COPY pyproject.toml ./
+COPY packages/core/pyproject.toml packages/core/
+COPY packages/agent-framework/pyproject.toml packages/agent-framework/
+COPY packages/ontology/pyproject.toml packages/ontology/
+COPY packages/connectors/pyproject.toml packages/connectors/
+COPY packages/agents/pyproject.toml packages/agents/
+COPY packages/pipelines/pyproject.toml packages/pipelines/
+COPY packages/api/pyproject.toml packages/api/
+COPY packages/mcp-server/pyproject.toml packages/mcp-server/
+COPY packages/human-interaction/pyproject.toml packages/human-interaction/
+
+# Install dependencies
+RUN pip install --no-cache-dir -e .
+
+# Copy source code
+COPY packages/ packages/
+COPY contracts/ contracts/
+
+# Install all packages in development mode for proper imports
+RUN pip install --no-cache-dir \
+    -e packages/core \
+    -e packages/agent-framework \
+    -e packages/ontology \
+    -e packages/connectors \
+    -e packages/agents \
+    -e packages/pipelines \
+    -e packages/api \
+    -e packages/human-interaction \
+    || true
+
+# -----------------------------------------------------------------------------
+# Stage 2: Production - Minimal runtime image
+# -----------------------------------------------------------------------------
+FROM python:3.11-slim AS production
+
+# Build arguments
+ARG VERSION=0.0.0-dev
+ARG BUILD_SHA=unknown
+
+# Labels for container metadata
+LABEL org.opencontainers.image.title="Open Forge API"
+LABEL org.opencontainers.image.description="FastAPI backend for Open Forge"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.source="https://github.com/18bravo/open-forge"
+LABEL org.opencontainers.image.vendor="18bravo"
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 openforge \
+    && useradd --uid 1000 --gid openforge --shell /bin/bash --create-home openforge
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --from=builder /build/packages /app/packages
+COPY --from=builder /build/contracts /app/contracts
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/packages/api/src:/app/packages/core/src:/app/packages/agent-framework/src:/app/packages/ontology/src:/app/packages/connectors/src:/app/packages/agents/src:/app/packages/pipelines/src:/app/packages/human-interaction/src \
+    APP_VERSION=${VERSION} \
+    BUILD_SHA=${BUILD_SHA} \
+    PORT=8000
+
+# Change ownership to non-root user
+RUN chown -R openforge:openforge /app
+
+# Switch to non-root user
+USER openforge
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+# -----------------------------------------------------------------------------
+# Stage 3: Development - Full development environment
+# -----------------------------------------------------------------------------
+FROM builder AS development
+
+# Install development dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    pytest-cov \
+    ruff \
+    mypy \
+    ipython \
+    debugpy
+
+# Set development environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DEBUG=1
+
+WORKDIR /app
+COPY --from=builder /build /app
+
+# Expose debugger port
+EXPOSE 8000 5678
+
+# Development command with hot reload
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

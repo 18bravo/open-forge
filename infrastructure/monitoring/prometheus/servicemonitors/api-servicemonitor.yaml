@@ -1,0 +1,124 @@
+# ServiceMonitor for Open Forge API (FastAPI)
+# Requires Prometheus Operator to be installed
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: open-forge-api
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge-api
+      app.kubernetes.io/component: api
+  namespaceSelector:
+    matchNames:
+      - open-forge
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - action: replace
+          targetLabel: service
+          replacement: open-forge-api
+      metricRelabelings:
+        # Drop high-cardinality metrics if needed
+        - sourceLabels: [__name__]
+          regex: 'go_.*'
+          action: drop
+        # Normalize endpoint labels
+        - sourceLabels: [endpoint, path]
+          separator: ''
+          regex: '(.*)'
+          targetLabel: endpoint
+          replacement: '$1'
+  targetLabels:
+    - app.kubernetes.io/name
+    - app.kubernetes.io/version
+---
+# PodMonitor for API pods with prometheus.io annotations
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: open-forge-api-pods
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge-api
+    app.kubernetes.io/component: api
+    prometheus: main
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge-api
+  namespaceSelector:
+    matchNames:
+      - open-forge
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - action: replace
+          targetLabel: service
+          replacement: open-forge-api
+---
+# PrometheusRule for API-specific metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: open-forge-api-rules
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge-api
+    prometheus: main
+    role: alert-rules
+spec:
+  groups:
+    - name: api.slo
+      interval: 30s
+      rules:
+        # SLO: 99.9% availability
+        - record: api:slo:availability:7d
+          expr: |
+            1 - (
+              sum(increase(http_requests_total{job="open-forge-api", status=~"5.."}[7d]))
+              /
+              sum(increase(http_requests_total{job="open-forge-api"}[7d]))
+            )
+
+        # SLO: 95% of requests under 500ms
+        - record: api:slo:latency:7d
+          expr: |
+            sum(increase(http_request_duration_seconds_bucket{job="open-forge-api", le="0.5"}[7d]))
+            /
+            sum(increase(http_request_duration_seconds_count{job="open-forge-api"}[7d]))
+
+        # Error budget remaining
+        - record: api:error_budget:remaining
+          expr: |
+            1 - (
+              (1 - api:slo:availability:7d)
+              /
+              0.001
+            )

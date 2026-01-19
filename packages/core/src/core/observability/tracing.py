@@ -1,6 +1,10 @@
 """
 OpenTelemetry tracing setup.
 """
+import asyncio
+from functools import wraps
+from typing import Callable, Any, Union
+
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -9,11 +13,24 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from functools import wraps
-from typing import Callable, Any
+
 from core.config import get_settings
 
 settings = get_settings()
+
+
+def add_span_attribute(key: str, value: Union[str, int, float, bool]) -> None:
+    """
+    Add an attribute to the current span.
+
+    Args:
+        key: Attribute key
+        value: Attribute value (must be a primitive type)
+    """
+    span = trace.get_current_span()
+    if span and span.is_recording():
+        span.set_attribute(key, value)
+
 
 def setup_tracing() -> None:
     """Initialize OpenTelemetry tracing."""
@@ -73,7 +90,5 @@ def traced(name: str = None):
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
-    
-    return decorator
 
-import asyncio
+    return decorator

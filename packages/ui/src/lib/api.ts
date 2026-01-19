@@ -910,3 +910,153 @@ export interface DashboardMetrics {
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   return apiFetch('/dashboard/metrics');
 }
+
+// ============================================================================
+// Observability Types (LangSmith Integration)
+// ============================================================================
+
+export interface TraceInfo {
+  run_id: string;
+  trace_id: string;
+  name: string;
+  start_time: string;
+  end_time: string | null;
+  status: 'success' | 'error' | 'running';
+  engagement_id: string | null;
+  agent_id: string | null;
+  metadata: Record<string, unknown>;
+  inputs: Record<string, unknown> | null;
+  outputs: Record<string, unknown> | null;
+  error: string | null;
+  latency_ms: number | null;
+  token_usage: Record<string, number> | null;
+}
+
+export interface FeedbackCreate {
+  run_id: string;
+  score: number;
+  comment?: string;
+  key?: string;
+}
+
+export interface FeedbackResponse {
+  run_id: string;
+  score: number;
+  comment: string | null;
+  key: string;
+  submitted_at: string;
+  submitted_by: string;
+}
+
+export interface ObservabilityStats {
+  total_traces: number;
+  successful_traces: number;
+  failed_traces: number;
+  avg_latency_ms: number;
+  total_tokens: number;
+  feedback_count: number;
+  avg_feedback_score: number | null;
+  time_range_start: string | null;
+  time_range_end: string | null;
+  top_operations: Array<{ name: string; count: number }>;
+  error_breakdown: Record<string, number>;
+}
+
+export interface DashboardUrlResponse {
+  url: string;
+  engagement_id: string | null;
+  run_id: string | null;
+}
+
+export interface LangSmithHealth {
+  status: 'healthy' | 'degraded' | 'unavailable';
+  configured: boolean;
+  enabled: boolean;
+  connected: boolean;
+  project?: string;
+  endpoint?: string;
+  error?: string;
+}
+
+// ============================================================================
+// Observability API Functions
+// ============================================================================
+
+export async function getEngagementTraces(
+  engagementId: string,
+  params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'success' | 'error' | 'running';
+    start_time?: string;
+    end_time?: string;
+  }
+): Promise<PaginatedResponse<TraceInfo>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', params.page.toString());
+  if (params?.page_size) searchParams.set('page_size', params.page_size.toString());
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.start_time) searchParams.set('start_time', params.start_time);
+  if (params?.end_time) searchParams.set('end_time', params.end_time);
+  const query = searchParams.toString();
+  return apiFetch(`/observability/traces/${engagementId}${query ? `?${query}` : ''}`);
+}
+
+export async function getAgentTraces(
+  agentId: string,
+  params?: {
+    page?: number;
+    page_size?: number;
+    engagement_id?: string;
+    start_time?: string;
+    end_time?: string;
+  }
+): Promise<PaginatedResponse<TraceInfo>> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.set('page', params.page.toString());
+  if (params?.page_size) searchParams.set('page_size', params.page_size.toString());
+  if (params?.engagement_id) searchParams.set('engagement_id', params.engagement_id);
+  if (params?.start_time) searchParams.set('start_time', params.start_time);
+  if (params?.end_time) searchParams.set('end_time', params.end_time);
+  const query = searchParams.toString();
+  return apiFetch(`/observability/traces/agent/${agentId}${query ? `?${query}` : ''}`);
+}
+
+export async function getTrace(runId: string): Promise<TraceInfo> {
+  return apiFetch(`/observability/trace/${runId}`);
+}
+
+export async function submitFeedback(data: FeedbackCreate): Promise<FeedbackResponse> {
+  return apiFetch('/observability/feedback', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getObservabilityStats(params?: {
+  engagement_id?: string;
+  start_time?: string;
+  end_time?: string;
+}): Promise<ObservabilityStats> {
+  const searchParams = new URLSearchParams();
+  if (params?.engagement_id) searchParams.set('engagement_id', params.engagement_id);
+  if (params?.start_time) searchParams.set('start_time', params.start_time);
+  if (params?.end_time) searchParams.set('end_time', params.end_time);
+  const query = searchParams.toString();
+  return apiFetch(`/observability/stats${query ? `?${query}` : ''}`);
+}
+
+export async function getDashboardUrl(params?: {
+  engagement_id?: string;
+  run_id?: string;
+}): Promise<DashboardUrlResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.engagement_id) searchParams.set('engagement_id', params.engagement_id);
+  if (params?.run_id) searchParams.set('run_id', params.run_id);
+  const query = searchParams.toString();
+  return apiFetch(`/observability/dashboard-url${query ? `?${query}` : ''}`);
+}
+
+export async function getLangSmithHealth(): Promise<LangSmithHealth> {
+  return apiFetch('/observability/health');
+}

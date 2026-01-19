@@ -15,6 +15,12 @@ from .cluster import (
     create_enablement_cluster,
 )
 
+from .react_agent import (
+    EnablementReActAgent,
+    create_enablement_react_agent,
+    ENABLEMENT_SYSTEM_PROMPT,
+)
+
 __all__ = [
     # Individual agents
     "DocumentationAgent",
@@ -27,4 +33,8 @@ __all__ = [
     # Convenience functions
     "run_enablement",
     "create_enablement_cluster",
+    # ReAct agent
+    "EnablementReActAgent",
+    "create_enablement_react_agent",
+    "ENABLEMENT_SYSTEM_PROMPT",
 ]

@@ -54,6 +54,12 @@ from .cluster import (
     create_operations_cluster,
 )
 
+from .react_agent import (
+    OperationsReActAgent,
+    create_operations_react_agent,
+    OPERATIONS_SYSTEM_PROMPT,
+)
+
 __all__ = [
     # Main cluster
     "OperationsCluster",
@@ -73,4 +79,8 @@ __all__ = [
     # Incident agent
     "IncidentAgent",
     "INCIDENT_AGENT_SYSTEM_PROMPT",
+    # ReAct agent
+    "OperationsReActAgent",
+    "create_operations_react_agent",
+    "OPERATIONS_SYSTEM_PROMPT",
 ]

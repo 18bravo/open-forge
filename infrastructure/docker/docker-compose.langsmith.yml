@@ -1,0 +1,231 @@
+version: '3.8'
+
+# LangSmith self-hosted service configuration for Open Forge
+# This extends the main docker-compose.yml and adds LangSmith for agent workflow observability
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.langsmith.yml up -d
+#
+# Required environment variables:
+#   - LANGSMITH_LICENSE_KEY: Your LangSmith self-hosted license key
+#   - LANGCHAIN_API_KEY: API key for accessing LangSmith
+#
+# Access LangSmith UI at: http://localhost:1984
+
+services:
+  # LangSmith Backend API Service
+  langsmith-backend:
+    image: langchain/langsmith-backend:latest
+    container_name: openforge-langsmith-backend
+    environment:
+      # License configuration
+      - LANGSMITH_LICENSE_KEY=${LANGSMITH_LICENSE_KEY}
+
+      # Database configuration - uses shared PostgreSQL
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${DB_USER:-foundry}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-foundry_dev}
+      - POSTGRES_DATABASE=langsmith
+
+      # Redis configuration
+      - REDIS_URL=redis://redis:6379/2
+
+      # API configuration
+      - PORT=1984
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Authentication
+      - AUTH_TYPE=none  # Use 'oauth' for production with proper auth config
+      - API_KEY_SALT=${LANGSMITH_API_KEY_SALT:-openforge-langsmith-salt}
+
+      # OpenTelemetry integration (connect to Jaeger)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=langsmith-backend
+
+      # Storage configuration for traces
+      - BLOB_STORAGE_ENABLED=true
+      - BLOB_STORAGE_URI=s3://foundry-artifacts/langsmith
+
+      # S3/MinIO configuration for blob storage
+      - AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY:-minio}
+      - AWS_SECRET_ACCESS_KEY=${S3_SECRET_KEY:-minio123}
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_DEFAULT_REGION=us-east-1
+    ports:
+      - "${LANGSMITH_BACKEND_PORT:-1984}:1984"
+    volumes:
+      - langsmith_backend_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      langsmith-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1984/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - openforge-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.langsmith-api.rule=PathPrefix(`/langsmith/api`)"
+      - "traefik.http.services.langsmith-api.loadbalancer.server.port=1984"
+      - "traefik.http.middlewares.langsmith-api-stripprefix.stripprefix.prefixes=/langsmith/api"
+      - "traefik.http.routers.langsmith-api.middlewares=langsmith-api-stripprefix"
+
+  # LangSmith Frontend UI Service
+  langsmith-frontend:
+    image: langchain/langsmith-frontend:latest
+    container_name: openforge-langsmith-frontend
+    environment:
+      # Backend API URL (internal Docker network)
+      - LANGSMITH_BACKEND_URL=http://langsmith-backend:1984
+
+      # Public URL for browser redirects
+      - NEXT_PUBLIC_BACKEND_URL=${LANGSMITH_PUBLIC_URL:-http://localhost:1984}
+
+      # UI configuration
+      - PORT=3001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # Feature flags
+      - ENABLE_PLAYGROUND=true
+      - ENABLE_ANNOTATION_QUEUE=true
+      - ENABLE_AUTOMATIONS=true
+    ports:
+      - "${LANGSMITH_FRONTEND_PORT:-3001}:3001"
+    depends_on:
+      langsmith-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - openforge-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.langsmith.rule=PathPrefix(`/langsmith`)"
+      - "traefik.http.services.langsmith.loadbalancer.server.port=3001"
+      - "traefik.http.middlewares.langsmith-stripprefix.stripprefix.prefixes=/langsmith"
+      - "traefik.http.routers.langsmith.middlewares=langsmith-stripprefix"
+
+  # LangSmith Queue Worker for background jobs
+  langsmith-queue:
+    image: langchain/langsmith-backend:latest
+    container_name: openforge-langsmith-queue
+    environment:
+      # License configuration
+      - LANGSMITH_LICENSE_KEY=${LANGSMITH_LICENSE_KEY}
+
+      # Database configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${DB_USER:-foundry}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-foundry_dev}
+      - POSTGRES_DATABASE=langsmith
+
+      # Redis configuration
+      - REDIS_URL=redis://redis:6379/2
+
+      # Queue worker mode
+      - RUN_MODE=queue_worker
+      - QUEUE_CONCURRENCY=${LANGSMITH_QUEUE_CONCURRENCY:-4}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # S3/MinIO configuration
+      - AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY:-minio}
+      - AWS_SECRET_ACCESS_KEY=${S3_SECRET_KEY:-minio123}
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      langsmith-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - openforge-network
+
+  # LangSmith Playground Service (optional, for testing prompts)
+  langsmith-playground:
+    image: langchain/langsmith-playground:latest
+    container_name: openforge-langsmith-playground
+    environment:
+      - LANGSMITH_BACKEND_URL=http://langsmith-backend:1984
+      - PORT=3002
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+      # LLM API keys for playground
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    ports:
+      - "${LANGSMITH_PLAYGROUND_PORT:-3002}:3002"
+    depends_on:
+      langsmith-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - openforge-network
+    profiles:
+      - playground  # Only start with --profile playground
+
+  # Initialize LangSmith database schema
+  langsmith-init:
+    image: postgres:15-alpine
+    container_name: openforge-langsmith-init
+    environment:
+      - PGHOST=postgres
+      - PGUSER=${DB_USER:-foundry}
+      - PGPASSWORD=${DB_PASSWORD:-foundry_dev}
+      - PGDATABASE=${DB_NAME:-foundry}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Creating LangSmith database if not exists...';
+      psql -c 'CREATE DATABASE langsmith;' 2>/dev/null || echo 'Database langsmith already exists';
+      echo 'Creating LangSmith MinIO bucket...';
+      echo 'LangSmith database initialization complete';
+      "
+    networks:
+      - openforge-network
+
+  # Initialize MinIO bucket for LangSmith
+  langsmith-minio-init:
+    image: minio/mc:latest
+    container_name: openforge-langsmith-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set minio http://minio:9000 ${S3_ACCESS_KEY:-minio} ${S3_SECRET_KEY:-minio123};
+      mc mb --ignore-existing minio/foundry-artifacts/langsmith;
+      echo 'LangSmith MinIO bucket created';
+      exit 0;
+      "
+    networks:
+      - openforge-network
+
+volumes:
+  langsmith_backend_data:
+    driver: local
+
+networks:
+  openforge-network:
+    external: true

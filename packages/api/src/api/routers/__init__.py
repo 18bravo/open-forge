@@ -9,6 +9,7 @@ from api.routers.approvals import router as approvals_router
 from api.routers.reviews import router as reviews_router
 from api.routers.admin import router as admin_router
 from api.routers.codegen import router as codegen_router
+from api.routers.observability import router as observability_router
 
 __all__ = [
     "health_router",
@@ -19,4 +20,5 @@ __all__ = [
     "reviews_router",
     "admin_router",
     "codegen_router",
+    "observability_router",
 ]

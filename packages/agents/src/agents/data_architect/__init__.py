@@ -14,6 +14,11 @@ from .ontology_designer_agent import OntologyDesignerAgent
 from .schema_validator_agent import SchemaValidatorAgent
 from .transformation_agent import TransformationDesignerAgent
 from .cluster import DataArchitectCluster, create_data_architect_cluster, ClusterPhase
+from .react_agent import (
+    DataArchitectReActAgent,
+    create_data_architect_react_agent,
+    DATA_ARCHITECT_SYSTEM_PROMPT,
+)
 
 __all__ = [
     "OntologyDesignerAgent",
@@ -21,5 +26,9 @@ __all__ = [
     "TransformationDesignerAgent",
     "DataArchitectCluster",
     "create_data_architect_cluster",
-    "ClusterPhase"
+    "ClusterPhase",
+    # ReAct agent
+    "DataArchitectReActAgent",
+    "create_data_architect_react_agent",
+    "DATA_ARCHITECT_SYSTEM_PROMPT",
 ]

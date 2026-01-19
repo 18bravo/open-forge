@@ -8,6 +8,11 @@ from agents.app_builder.workflow_agent import WorkflowDesignerAgent
 from agents.app_builder.integration_agent import IntegrationAgent
 from agents.app_builder.deployment_agent import DeploymentAgent
 from agents.app_builder.cluster import AppBuilderCluster, BuildPhase
+from agents.app_builder.react_agent import (
+    AppBuilderReActAgent,
+    create_app_builder_react_agent,
+    APP_BUILDER_SYSTEM_PROMPT,
+)
 
 __all__ = [
     "UIGeneratorAgent",
@@ -16,4 +21,8 @@ __all__ = [
     "DeploymentAgent",
     "AppBuilderCluster",
     "BuildPhase",
+    # ReAct agent
+    "AppBuilderReActAgent",
+    "create_app_builder_react_agent",
+    "APP_BUILDER_SYSTEM_PROMPT",
 ]

@@ -64,6 +64,12 @@ from .cluster import (
     run_discovery,
 )
 
+from .react_agent import (
+    DiscoveryReActAgent,
+    create_discovery_react_agent,
+    DISCOVERY_SYSTEM_PROMPT,
+)
+
 __all__ = [
     # Main cluster
     "DiscoveryCluster",
@@ -96,4 +102,8 @@ __all__ = [
     "IDENTIFY_INTEGRATIONS",
     "VALIDATE_REQUIREMENTS",
     "GENERATE_REQUIREMENTS_DOC",
+    # ReAct agent
+    "DiscoveryReActAgent",
+    "create_discovery_react_agent",
+    "DISCOVERY_SYSTEM_PROMPT",
 ]

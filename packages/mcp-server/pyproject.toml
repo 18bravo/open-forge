@@ -1,0 +1,26 @@
+[project]
+name = "open-forge-mcp-server"
+version = "0.1.0"
+description = "MCP server exposing Open Forge capabilities as tools"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+open-forge-mcp = "mcp_server.open_forge_mcp:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server"]

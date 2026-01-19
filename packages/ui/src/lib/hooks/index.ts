@@ -11,3 +11,4 @@ export * from './use-settings';
 export * from './use-review';
 export * from './use-activity';
 export * from './use-dashboard';
+export * from './use-observability';

@@ -356,7 +356,45 @@ Current version floors in pyproject.toml files:
 - Event bus implements proper consumer group patterns for Redis Streams
 
 ### Package: agent-framework
-_Pending review._
+
+**Status:** Reviewed
+
+**Summary:** The agent-framework package provides LangGraph base classes, state management, memory integration, and tool utilities. It includes a fluent graph builder API, dual-memory architecture (short-term checkpoints + long-term semantic search), and MCP adapter for extensible tool integration.
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Medium | Missing return type hints on multiple async methods | `mcp_adapter.py:48,99,123,145,167,270`, `long_term.py:73,116,187,221,254`, `memory.py:multiple` | Add explicit return type hints to all async methods for type safety and IDE support |
+| 2 | Medium | `build()` and `build_sync()` return `Any` instead of typed CompiledGraph | `graph_builder.py:59,69` | Import and use `CompiledStateGraph` type from langgraph for better type inference |
+| 3 | Medium | Exception handling silently passes in disconnect methods | `mcp_adapter.py:252-254,265-267` | Log exceptions with warning level instead of silent pass for debugging purposes |
+| 4 | Low | `create_subgraph` function returns wrong type (returns compiled graph, not StateGraph) | `graph_builder.py:80,95` | Update return type annotation to match actual return type (`Any` or `CompiledStateGraph`) |
+| 5 | Low | OpenAI embeddings hardcoded in `EngagementMemoryStore` | `long_term.py:46` | Make embedding model configurable via constructor parameter or settings |
+| 6 | Low | Magic dimension number 1536 hardcoded | `long_term.py:55` | Extract as constant or compute from embedding model selection |
+| 7 | Low | Duplicate store initialization pattern | `long_term.py:49-59` vs `base_memory_agent.py:92-94` | Consider consolidating store access patterns to reduce code duplication |
+| 8 | Low | `session` context manager missing return type hint | `mcp_adapter.py:270` | Add `-> AsyncIterator[MCPToolProvider]` return type |
+
+**Positive Observations:**
+- **Excellent LangGraph integration**: Fluent builder pattern (`AgentGraphBuilder`) provides clean API for constructing StateGraph workflows with proper node, edge, and conditional edge support
+- **Dual-memory architecture**: Proper separation of short-term (PostgresSaver checkpoints) and long-term (PostgresStore with pgvector semantic search) memory
+- **Memory-aware agent base class**: `MemoryAwareAgent` and `SimpleMemoryAwareAgent` provide well-designed abstractions with built-in `remember` and `recall` tools
+- **Clean tool abstraction**: `@tool` decorator used correctly with proper docstrings serving as tool descriptions for the LLM
+- **MCP adapter well-structured**: `MCPToolProvider` handles multiple MCP server connections with convenience methods for common servers (filesystem, postgres, github)
+- **Proper async patterns**: Consistent use of async/await with `asynccontextmanager` for resource cleanup
+- **Good use of Pydantic models**: `MCPServerConnection`, `AgentInput`, `AgentOutput`, `EngagementState` provide strong typing
+- **Comprehensive docstrings**: Methods include clear descriptions, Args, Returns, and Example sections
+- **State management with validation**: Phase transitions validated against allowed transition map
+- **Type variables used appropriately**: `StateType = TypeVar("StateType", bound=BaseModel)` for generic state handling
+- **Builder pattern with method chaining**: All `add_*` methods return `self` for fluent API
+- **MemoryTypes constants**: Provides type-safe memory type identifiers to prevent typos
+- **Searchable text generation**: `_content_to_text` recursively extracts text from nested structures for semantic indexing
+- **Namespace-based memory organization**: Memories scoped by `(engagements, engagement_id, memory_type)` tuples
+
+**Architecture Observations:**
+- **Graph Builder**: Wraps LangGraph's `StateGraph` with simplified API, automatic checkpointer setup, and subgraph support
+- **Memory Layer**: Two-tier memory with `PostgresSaver` for thread-level checkpoints and `PostgresStore` with pgvector for cross-thread semantic search
+- **Tool Layer**: `BaseTool` from LangChain used throughout; `create_tool` factory for quick tool creation; MCP adapter for external tool servers
+- **State Layer**: `StateManager` handles engagement state CRUD with JSON persistence and phase transition validation
 
 ### Package: agents
 

@@ -1,0 +1,1 @@
+export { CanvasWrapper } from './CanvasWrapper';

@@ -1,0 +1,366 @@
+# Open Forge Resource Quotas
+# Namespace-level resource limits to control resource consumption
+---
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT - Limited Resources
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: resource-quota-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: dev
+  annotations:
+    description: "Limited resource quota for development environment"
+spec:
+  hard:
+    # Compute Resources
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+
+    # Storage Resources
+    requests.storage: 100Gi
+    persistentvolumeclaims: "10"
+
+    # Object Counts
+    pods: "50"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+    replicationcontrollers: "10"
+
+    # Workload Counts
+    count/deployments.apps: "20"
+    count/replicasets.apps: "40"
+    count/statefulsets.apps: "10"
+    count/jobs.batch: "20"
+    count/cronjobs.batch: "10"
+
+    # Service Resources
+    services.loadbalancers: "0"
+    services.nodeports: "5"
+---
+# Development Compute Quota (separate for clarity)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: dev
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+  scopes:
+    - NotTerminating
+---
+# Development Batch Quota (for jobs)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: batch-quota-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: dev
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+  scopes:
+    - Terminating
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - low
+          - medium
+---
+# =============================================================================
+# STAGING ENVIRONMENT - Moderate Resources
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: resource-quota-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: staging
+  annotations:
+    description: "Moderate resource quota for staging environment"
+spec:
+  hard:
+    # Compute Resources
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+
+    # Storage Resources
+    requests.storage: 250Gi
+    persistentvolumeclaims: "20"
+
+    # Object Counts
+    pods: "100"
+    services: "30"
+    secrets: "100"
+    configmaps: "100"
+    replicationcontrollers: "20"
+
+    # Workload Counts
+    count/deployments.apps: "30"
+    count/replicasets.apps: "60"
+    count/statefulsets.apps: "15"
+    count/jobs.batch: "50"
+    count/cronjobs.batch: "20"
+
+    # Service Resources
+    services.loadbalancers: "2"
+    services.nodeports: "10"
+---
+# Staging Compute Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: staging
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+  scopes:
+    - NotTerminating
+---
+# Staging High Priority Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: staging
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - critical
+          - high
+---
+# =============================================================================
+# PRODUCTION ENVIRONMENT - Full Resources
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: resource-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: prod
+  annotations:
+    description: "Full resource quota for production environment"
+spec:
+  hard:
+    # Compute Resources
+    requests.cpu: "64"
+    requests.memory: 128Gi
+    limits.cpu: "128"
+    limits.memory: 256Gi
+
+    # Storage Resources
+    requests.storage: 1Ti
+    persistentvolumeclaims: "50"
+
+    # Object Counts
+    pods: "500"
+    services: "100"
+    secrets: "200"
+    configmaps: "200"
+    replicationcontrollers: "50"
+
+    # Workload Counts
+    count/deployments.apps: "100"
+    count/replicasets.apps: "200"
+    count/statefulsets.apps: "30"
+    count/jobs.batch: "200"
+    count/cronjobs.batch: "50"
+
+    # Service Resources
+    services.loadbalancers: "5"
+    services.nodeports: "20"
+---
+# Production Compute Quota for Non-Terminating workloads
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+spec:
+  hard:
+    requests.cpu: "48"
+    requests.memory: 96Gi
+    limits.cpu: "96"
+    limits.memory: 192Gi
+  scopes:
+    - NotTerminating
+---
+# Production Critical Priority Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: critical-priority-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+  annotations:
+    description: "Reserved quota for critical workloads (databases)"
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+    pods: "20"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - critical
+---
+# Production High Priority Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+  annotations:
+    description: "Quota for high priority workloads (API, Dagster)"
+spec:
+  hard:
+    requests.cpu: "32"
+    requests.memory: 64Gi
+    limits.cpu: "64"
+    limits.memory: 128Gi
+    pods: "100"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - high
+---
+# Production Batch Jobs Quota
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: batch-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+  annotations:
+    description: "Quota for batch jobs and pipeline runs"
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+    pods: "100"
+  scopes:
+    - Terminating
+---
+# Production Best Effort Quota (for low priority batch)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+spec:
+  hard:
+    pods: "50"
+  scopes:
+    - BestEffort
+---
+# =============================================================================
+# GPU RESOURCES (if applicable)
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+  annotations:
+    description: "GPU resource quota for ML workloads"
+spec:
+  hard:
+    requests.nvidia.com/gpu: "4"
+    limits.nvidia.com/gpu: "4"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: staging
+spec:
+  hard:
+    requests.nvidia.com/gpu: "1"
+    limits.nvidia.com/gpu: "1"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-quota-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: dev
+spec:
+  hard:
+    requests.nvidia.com/gpu: "0"
+    limits.nvidia.com/gpu: "0"

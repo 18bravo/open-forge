@@ -1,0 +1,254 @@
+# Open Forge RoleBindings
+# Binds roles to their respective service accounts
+---
+# API RoleBinding - Production
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-role-binding
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds api-role to open-forge-api service account"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-api
+    namespace: open-forge-prod
+roleRef:
+  kind: Role
+  name: api-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# API RoleBinding - Staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-role-binding
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds api-role to open-forge-api service account (staging)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-api
+    namespace: open-forge-staging
+roleRef:
+  kind: Role
+  name: api-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# API RoleBinding - Development
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-role-binding
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds api-role to open-forge-api service account (dev)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-api
+    namespace: open-forge-dev
+roleRef:
+  kind: Role
+  name: api-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Dagster RoleBinding - Production
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dagster-role-binding
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds dagster-role to open-forge-dagster service account"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-dagster
+    namespace: open-forge-prod
+roleRef:
+  kind: Role
+  name: dagster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Dagster RoleBinding - Staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dagster-role-binding
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds dagster-role to open-forge-dagster service account (staging)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-dagster
+    namespace: open-forge-staging
+roleRef:
+  kind: Role
+  name: dagster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Dagster RoleBinding - Development
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dagster-role-binding
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds dagster-role to open-forge-dagster service account (dev)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-dagster
+    namespace: open-forge-dev
+roleRef:
+  kind: Role
+  name: dagster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Monitoring RoleBinding - Production
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monitoring-role-binding
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds monitoring-role to open-forge-monitoring service account"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-monitoring
+    namespace: monitoring
+roleRef:
+  kind: Role
+  name: monitoring-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Monitoring RoleBinding - Staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monitoring-role-binding
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds monitoring-role to open-forge-monitoring service account (staging)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-monitoring
+    namespace: monitoring
+roleRef:
+  kind: Role
+  name: monitoring-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Monitoring RoleBinding - Development
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monitoring-role-binding
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds monitoring-role to open-forge-monitoring service account (dev)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-monitoring
+    namespace: monitoring
+roleRef:
+  kind: Role
+  name: monitoring-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Langflow RoleBinding - Production
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: langflow-role-binding
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds langflow-role to open-forge-langflow service account"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-langflow
+    namespace: open-forge-prod
+roleRef:
+  kind: Role
+  name: langflow-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Langflow RoleBinding - Staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: langflow-role-binding
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds langflow-role to open-forge-langflow service account (staging)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-langflow
+    namespace: open-forge-staging
+roleRef:
+  kind: Role
+  name: langflow-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Langflow RoleBinding - Development
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: langflow-role-binding
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds langflow-role to open-forge-langflow service account (dev)"
+subjects:
+  - kind: ServiceAccount
+    name: open-forge-langflow
+    namespace: open-forge-dev
+roleRef:
+  kind: Role
+  name: langflow-role
+  apiGroup: rbac.authorization.k8s.io

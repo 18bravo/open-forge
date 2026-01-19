@@ -1,0 +1,177 @@
+# Open Forge UI HorizontalPodAutoscaler
+# Autoscaling for the frontend UI service
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: open-forge-ui-hpa
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "HPA for Open Forge UI with CPU-based scaling"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: open-forge-ui
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    # Primary metric: CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Secondary metric: Memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 85
+    # Custom metric: Nginx active connections (if using nginx)
+    - type: Pods
+      pods:
+        metric:
+          name: nginx_connections_active
+        target:
+          type: AverageValue
+          averageValue: "100"
+  behavior:
+    # Scale down configuration
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Min
+    # Scale up configuration - responsive to traffic spikes
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+---
+# Alternative: Ingress-based scaling using KEDA
+# Scales based on incoming HTTP requests through ingress controller
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: open-forge-ui-keda
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+spec:
+  scaleTargetRef:
+    name: open-forge-ui
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 2
+  maxReplicaCount: 8
+  triggers:
+    # Scale based on ingress requests per second
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: nginx_ingress_requests_per_second
+        query: |
+          sum(rate(nginx_ingress_controller_requests{
+            namespace="open-forge",
+            service="open-forge-ui"
+          }[2m]))
+        threshold: "100"
+    # Scale based on response time
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: nginx_ingress_response_time_p95
+        query: |
+          histogram_quantile(0.95, sum(rate(
+            nginx_ingress_controller_request_duration_seconds_bucket{
+              namespace="open-forge",
+              service="open-forge-ui"
+            }[5m]
+          )) by (le))
+        threshold: "0.5"  # Scale up if P95 latency exceeds 500ms
+---
+# Environment-specific HPA overrides via Kustomize patches
+# These can be applied using kustomize overlays
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: open-forge-ui-hpa-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    environment: dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: open-forge-ui
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 0
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: open-forge-ui-hpa-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    environment: staging
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: open-forge-ui
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 180
+    scaleUp:
+      stabilizationWindowSeconds: 0

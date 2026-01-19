@@ -1,0 +1,201 @@
+# Open Forge PodDisruptionBudgets
+# Ensures high availability during voluntary disruptions
+# (node drains, upgrades, scaling operations)
+---
+# API PodDisruptionBudget
+# Ensures at least 2 API pods are always available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: open-forge-api-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for API - maintains minimum 2 replicas for high availability"
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+---
+# Dagster Webserver PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dagster-webserver-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for Dagster webserver - maintains minimum 1 replica"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver
+---
+# Dagster Daemon PodDisruptionBudget
+# Daemon is a singleton, so we use maxUnavailable to allow rolling updates
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dagster-daemon-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-daemon
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for Dagster daemon - allows controlled disruption of singleton"
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-daemon
+---
+# UI PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: open-forge-ui-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for UI - maintains minimum 1 replica"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: ui
+---
+# PostgreSQL PodDisruptionBudget
+# Critical for data integrity - very conservative
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for PostgreSQL - maintains minimum 1 replica for data availability"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: postgres
+---
+# Redis PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for Redis - maintains minimum 1 replica for cache availability"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+---
+# MinIO PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: minio-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: minio
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for MinIO - maintains minimum 1 replica for object storage"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: minio
+---
+# Langflow PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: langflow-pdb
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "PDB for Langflow - maintains minimum 1 replica"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: langflow
+---
+# Environment-specific PDB configurations
+# Development - more relaxed constraints
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: open-forge-api-pdb-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    environment: dev
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+---
+# Staging - moderate constraints
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: open-forge-api-pdb-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    environment: staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api

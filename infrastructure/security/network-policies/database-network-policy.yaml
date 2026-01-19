@@ -1,0 +1,448 @@
+# Open Forge Database Network Policies
+# Controls network access for PostgreSQL, Redis, and MinIO
+#
+# PostgreSQL allowed ingress:
+#   - From API service
+#   - From Dagster components
+#   - From Langflow
+#   - From monitoring (metrics exporter scraping)
+#
+# Redis allowed ingress:
+#   - From API service only
+#   - From monitoring (metrics exporter scraping)
+#
+# MinIO allowed ingress:
+#   - From API service
+#   - From Dagster components
+#   - From monitoring (metrics scraping)
+---
+# PostgreSQL Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for PostgreSQL database"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From API service
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 5432
+    # From Dagster webserver
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+      ports:
+        - protocol: TCP
+          port: 5432
+    # From Dagster daemon
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+      ports:
+        - protocol: TCP
+          port: 5432
+    # From Langflow
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Prometheus scraping postgres-exporter
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9187
+  egress:
+    # Postgres doesn't need outbound connections except for DNS
+    []
+---
+# Redis Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Redis cache"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From API service only
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Prometheus scraping redis-exporter
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9121
+  egress:
+    # Redis doesn't need outbound connections except for DNS
+    []
+---
+# MinIO Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for MinIO object storage"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: minio
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From API service
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 9000
+    # From Dagster components
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+      ports:
+        - protocol: TCP
+          port: 9000
+    # From Langflow
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 9000
+    # Console access from ingress (for admin)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 9001
+    # Prometheus metrics scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9000
+  egress:
+    # MinIO doesn't need outbound connections except for DNS
+    []
+---
+# PostgreSQL Network Policy for Staging
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for PostgreSQL database"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9187
+  egress: []
+---
+# Redis Network Policy for Staging
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Redis cache"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 6379
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9121
+  egress: []
+---
+# MinIO Network Policy for Staging
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for MinIO object storage"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: minio
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 9000
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 9001
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9000
+  egress: []
+---
+# Database policies for Development (more permissive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for PostgreSQL database (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 9187
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Redis cache (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+      ports:
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 9121
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for MinIO object storage (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: minio
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+      ports:
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 9001
+  egress: []

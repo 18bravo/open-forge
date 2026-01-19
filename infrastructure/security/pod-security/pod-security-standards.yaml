@@ -1,0 +1,212 @@
+# Open Forge Pod Security Standards (PSS) Configuration
+# Implements Kubernetes Pod Security Standards using namespace labels
+#
+# Pod Security Standards define three profiles:
+#   - Privileged: Unrestricted policy, provides widest possible level of permissions
+#   - Baseline: Minimally restrictive policy, prevents known privilege escalations
+#   - Restricted: Heavily restricted policy, follows pod hardening best practices
+#
+# Modes:
+#   - enforce: Policy violations will cause the pod to be rejected
+#   - audit: Policy violations will trigger audit log entries
+#   - warn: Policy violations will trigger user-facing warnings
+#
+# For production, we use 'restricted' profile with 'enforce' mode.
+---
+# Update production namespace with PSS labels
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: production
+    # Pod Security Standards labels
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    description: "Production environment for Open Forge - Restricted PSS enforced"
+---
+# Update staging namespace with PSS labels (slightly relaxed for testing)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: staging
+    # Pod Security Standards labels - enforce baseline, warn restricted
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    description: "Staging environment for Open Forge - Baseline PSS enforced, Restricted audit"
+---
+# Update development namespace with PSS labels (most permissive)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: development
+    # Pod Security Standards labels - warn only
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    description: "Development environment for Open Forge - Baseline PSS enforced, Restricted warn"
+---
+# Monitoring namespace with PSS labels
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/part-of: open-forge
+    # Monitoring tools may need slightly relaxed permissions
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    description: "Monitoring namespace - Baseline PSS enforced"
+---
+# PSS Exception - RuntimeDefault seccomp profile for specific workloads
+# Note: In Kubernetes 1.27+, you can use RuntimeDefault seccomp
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pss-exceptions
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    description: "Documentation for PSS exceptions"
+data:
+  exceptions.md: |
+    # Pod Security Standards Exceptions
+
+    ## Production Namespace (open-forge-prod)
+
+    The production namespace enforces the 'restricted' Pod Security Standard.
+    All pods must comply with the following requirements:
+
+    ### Required Pod Security Context:
+    - runAsNonRoot: true
+    - runAsUser: >= 1000 (non-root)
+    - seccompProfile.type: RuntimeDefault
+    - allowPrivilegeEscalation: false
+
+    ### Required Container Security Context:
+    - allowPrivilegeEscalation: false
+    - readOnlyRootFilesystem: true (recommended)
+    - capabilities.drop: ["ALL"]
+
+    ### Exceptions:
+    The following workloads have documented exceptions:
+
+    1. **PostgreSQL Init Container**
+       - Requires runAsUser: 0 for permission setup
+       - This is handled with a separate namespace or admission controller exception
+
+    2. **MinIO**
+       - May require writable filesystem for data storage
+       - readOnlyRootFilesystem: false is acceptable
+
+    ## Staging Namespace (open-forge-staging)
+
+    The staging namespace enforces the 'baseline' Pod Security Standard
+    with 'restricted' auditing. This allows testing while tracking violations.
+
+    ## Development Namespace (open-forge-dev)
+
+    The development namespace enforces 'baseline' with 'restricted' warnings.
+    This provides flexibility while alerting developers to potential issues.
+---
+# ResourceQuota to enforce PSS-compliant pod counts
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pss-resource-quota
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    description: "Resource quota for PSS-compliant pods"
+spec:
+  hard:
+    # Only count running pods (not pending/failed)
+    pods: "200"
+    # Limit the number of services
+    services: "50"
+    # Limit secrets and configmaps
+    secrets: "100"
+    configmaps: "100"
+    # Limit PVCs
+    persistentvolumeclaims: "50"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - high-priority
+          - medium-priority
+          - low-priority
+---
+# LimitRange to enforce resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pss-limit-range
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    description: "Limit range for pods in production"
+spec:
+  limits:
+    # Default container limits
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "128Mi"
+      max:
+        cpu: "4"
+        memory: "8Gi"
+      min:
+        cpu: "10m"
+        memory: "16Mi"
+    # Pod limits
+    - type: Pod
+      max:
+        cpu: "8"
+        memory: "16Gi"
+    # PVC limits
+    - type: PersistentVolumeClaim
+      max:
+        storage: "500Gi"
+      min:
+        storage: "1Gi"

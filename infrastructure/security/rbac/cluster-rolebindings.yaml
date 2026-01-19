@@ -1,0 +1,199 @@
+# Open Forge ClusterRoleBindings
+# Binds cluster roles to their respective service accounts
+---
+# Prometheus ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-cluster-role-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds prometheus-cluster-role to prometheus service account"
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+  - kind: ServiceAccount
+    name: open-forge-monitoring
+    namespace: monitoring
+roleRef:
+  kind: ClusterRole
+  name: prometheus-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Trivy Operator ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trivy-operator-cluster-role-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds trivy-operator-cluster-role to trivy-operator service account"
+subjects:
+  - kind: ServiceAccount
+    name: trivy-operator
+    namespace: trivy-system
+roleRef:
+  kind: ClusterRole
+  name: trivy-operator-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Falco ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: falco-cluster-role-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds falco-cluster-role to falco service account"
+subjects:
+  - kind: ServiceAccount
+    name: falco
+    namespace: falco
+roleRef:
+  kind: ClusterRole
+  name: falco-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# External Secrets Operator ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-secrets-cluster-role-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds external-secrets-cluster-role to external-secrets service account"
+subjects:
+  - kind: ServiceAccount
+    name: external-secrets
+    namespace: external-secrets
+roleRef:
+  kind: ClusterRole
+  name: external-secrets-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Cert-Manager ClusterRoleBinding for Open Forge
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-manager-open-forge-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Binds cert-manager role for Open Forge certificates"
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+roleRef:
+  kind: ClusterRole
+  name: cert-manager-open-forge-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Aggregate ClusterRole for view access to Open Forge resources
+# This allows users with 'view' ClusterRole to also view Open Forge custom resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: open-forge-view
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+    # This label aggregates to the built-in 'view' ClusterRole
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+  annotations:
+    description: "Aggregate view role for Open Forge resources"
+rules:
+  # View vulnerability reports
+  - apiGroups: ["aquasecurity.github.io"]
+    resources:
+      - vulnerabilityreports
+      - configauditreports
+      - exposedsecretreports
+    verbs: ["get", "list", "watch"]
+  # View external secrets status (not the actual secrets)
+  - apiGroups: ["external-secrets.io"]
+    resources:
+      - externalsecrets/status
+    verbs: ["get", "list", "watch"]
+  # View certificates
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+      - certificates/status
+    verbs: ["get", "list", "watch"]
+---
+# Aggregate ClusterRole for edit access to Open Forge resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: open-forge-edit
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+    # This label aggregates to the built-in 'edit' ClusterRole
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+  annotations:
+    description: "Aggregate edit role for Open Forge resources"
+rules:
+  # Manage external secrets
+  - apiGroups: ["external-secrets.io"]
+    resources:
+      - externalsecrets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Manage certificates
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Aggregate ClusterRole for admin access to Open Forge resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: open-forge-admin
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+    # This label aggregates to the built-in 'admin' ClusterRole
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+  annotations:
+    description: "Aggregate admin role for Open Forge resources"
+rules:
+  # Full access to external secrets
+  - apiGroups: ["external-secrets.io"]
+    resources:
+      - externalsecrets
+      - secretstores
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Full access to certificates and issuers
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+      - issuers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # View security reports
+  - apiGroups: ["aquasecurity.github.io"]
+    resources:
+      - vulnerabilityreports
+      - configauditreports
+      - exposedsecretreports
+      - rbacassessmentreports
+    verbs: ["get", "list", "watch", "delete"]

@@ -1,0 +1,154 @@
+# Open Forge API HorizontalPodAutoscaler
+# Advanced autoscaling with CPU, memory, and custom metrics
+# Requires: metrics-server and prometheus-adapter for custom metrics
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: open-forge-api-hpa
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "HPA for Open Forge API with CPU, memory, and custom metrics scaling"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: open-forge-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    # CPU utilization - primary scaling metric
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Memory utilization - secondary scaling metric
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: HTTP requests per second
+    # Requires prometheus-adapter with appropriate configuration
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "100"
+    # Custom metric: Active connections
+    - type: Pods
+      pods:
+        metric:
+          name: http_active_connections
+        target:
+          type: AverageValue
+          averageValue: "50"
+  behavior:
+    # Scale down configuration - conservative to avoid thrashing
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes stabilization
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min
+    # Scale up configuration - aggressive for responsiveness
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+---
+# PrometheusAdapter configuration for custom metrics
+# This ConfigMap configures the prometheus-adapter to expose custom metrics
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-adapter-api-config
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: prometheus-adapter
+data:
+  config.yaml: |
+    # Rules for exposing custom metrics from Prometheus
+    rules:
+      # HTTP requests per second metric
+      - seriesQuery: 'http_requests_total{namespace="open-forge",pod!=""}'
+        seriesFilters: []
+        resources:
+          overrides:
+            namespace:
+              resource: namespace
+            pod:
+              resource: pod
+        name:
+          matches: "^(.*)_total$"
+          as: "${1}_per_second"
+        metricsQuery: 'rate(<<.Series>>{<<.LabelMatchers>>}[2m])'
+
+      # Active HTTP connections metric
+      - seriesQuery: 'http_active_connections{namespace="open-forge",pod!=""}'
+        seriesFilters: []
+        resources:
+          overrides:
+            namespace:
+              resource: namespace
+            pod:
+              resource: pod
+        name:
+          matches: "^(.*)$"
+          as: "$1"
+        metricsQuery: '<<.Series>>{<<.LabelMatchers>>}'
+
+      # Request latency P99 metric
+      - seriesQuery: 'http_request_duration_seconds_bucket{namespace="open-forge",pod!=""}'
+        seriesFilters: []
+        resources:
+          overrides:
+            namespace:
+              resource: namespace
+            pod:
+              resource: pod
+        name:
+          matches: "^(.*)_bucket$"
+          as: "${1}_p99"
+        metricsQuery: 'histogram_quantile(0.99, rate(<<.Series>>{<<.LabelMatchers>>}[5m]))'
+---
+# ServiceMonitor for API metrics (if using Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: open-forge-api-autoscaling-metrics
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

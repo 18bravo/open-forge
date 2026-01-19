@@ -1,0 +1,292 @@
+# Open Forge ClusterRoles
+# Cluster-wide roles for components that need cross-namespace access
+#
+# These roles should be used sparingly and only when necessary.
+---
+# Prometheus ClusterRole - Read metrics from all namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-cluster-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "ClusterRole for Prometheus - read metrics from all namespaces"
+rules:
+  # Read nodes for node-level metrics
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  # Read node metrics
+  - apiGroups: [""]
+    resources: ["nodes/metrics"]
+    verbs: ["get"]
+  # Read node proxy for kubelet metrics
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+  # Read pods for pod-level metrics and service discovery
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Read services for service discovery
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  # Read endpoints for service discovery
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "list", "watch"]
+  # Read endpointslices for service discovery (newer API)
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  # Read configmaps (for Prometheus configuration and ServiceMonitors)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Read namespaces for namespace-level filtering
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Read secrets (for TLS certificates in service monitors)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  # Read ingresses for ingress metrics
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Prometheus Operator CRDs
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - alertmanagers
+      - alertmanagers/finalizers
+      - alertmanagerconfigs
+      - prometheuses
+      - prometheuses/finalizers
+      - thanosrulers
+      - thanosrulers/finalizers
+      - servicemonitors
+      - podmonitors
+      - probes
+      - prometheusrules
+    verbs: ["get", "list", "watch"]
+  # Non-resource URLs for metrics endpoints
+  - nonResourceURLs:
+      - "/metrics"
+      - "/metrics/cadvisor"
+    verbs: ["get"]
+---
+# Trivy Operator ClusterRole - Security scanning across namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trivy-operator-cluster-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "ClusterRole for Trivy Operator - security scanning"
+rules:
+  # Read pods for vulnerability scanning
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Read pods logs for scanning results
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # Read secrets (for registry credentials)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  # Read configmaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Read service accounts
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+  # Read namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Read nodes
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  # Manage jobs for scanning
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Read workloads for scanning
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  # Trivy Operator CRDs
+  - apiGroups: ["aquasecurity.github.io"]
+    resources:
+      - vulnerabilityreports
+      - configauditreports
+      - exposedsecretreports
+      - rbacassessmentreports
+      - sbomreports
+      - clustervulnerabilityreports
+      - clustercompliancereports
+      - clusterinfraassessmentreports
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read CronJobs
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "watch"]
+  # Read roles and clusterroles for RBAC assessment
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+  # Read network policies
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Read custom resources
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+---
+# Falco ClusterRole - Runtime security monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: falco-cluster-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "ClusterRole for Falco - runtime security monitoring"
+rules:
+  # Read pods for enriching alerts with pod metadata
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Read namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  # Read nodes
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  # Read services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  # Read deployments and replicasets for metadata
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  # Read events for correlation
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create"]
+---
+# External Secrets Operator ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-secrets-cluster-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "ClusterRole for External Secrets Operator"
+rules:
+  # Manage secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read configmaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  # Read service accounts
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch"]
+  # Read namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  # External Secrets CRDs
+  - apiGroups: ["external-secrets.io"]
+    resources:
+      - externalsecrets
+      - externalsecrets/status
+      - externalsecrets/finalizers
+      - secretstores
+      - secretstores/status
+      - clustersecretstores
+      - clustersecretstores/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Events for status reporting
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+# Cert-Manager ClusterRole (for certificate management)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-manager-open-forge-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "ClusterRole for cert-manager issuer access"
+rules:
+  # Read/write certificates and certificate requests
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - certificates
+      - certificates/status
+      - certificates/finalizers
+      - certificaterequests
+      - certificaterequests/status
+      - certificaterequests/finalizers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read issuers and cluster issuers
+  - apiGroups: ["cert-manager.io"]
+    resources:
+      - issuers
+      - issuers/status
+      - clusterissuers
+      - clusterissuers/status
+    verbs: ["get", "list", "watch"]
+  # Manage secrets for certificates
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read ingresses for certificate discovery
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Update ingress status
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["update"]
+  # ACME challenge resources
+  - apiGroups: ["acme.cert-manager.io"]
+    resources:
+      - challenges
+      - challenges/status
+      - challenges/finalizers
+      - orders
+      - orders/status
+      - orders/finalizers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

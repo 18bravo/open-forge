@@ -1,0 +1,356 @@
+# Open Forge Security Context Constraints
+# Defines security contexts that all pods must comply with
+#
+# This file provides:
+#   1. Example PodSecurityPolicy resources (deprecated in K8s 1.21+, removed in 1.25)
+#   2. Security context templates for deployments
+#   3. Kyverno/OPA Gatekeeper policies for enforcement (when PSS is not sufficient)
+---
+# Security Context Template for API Pods
+# Use this as a reference for configuring pod security contexts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-context-templates
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    description: "Security context templates for Open Forge pods"
+data:
+  api-pod-security-context.yaml: |
+    # Pod-level security context for API
+    securityContext:
+      # Run as non-root user
+      runAsNonRoot: true
+      # Specific non-root user ID
+      runAsUser: 1000
+      # Specific group ID
+      runAsGroup: 1000
+      # Filesystem group
+      fsGroup: 1000
+      # Seccomp profile (RuntimeDefault recommended)
+      seccompProfile:
+        type: RuntimeDefault
+      # Supplemental groups if needed
+      supplementalGroups: []
+      # fsGroupChangePolicy for volumes
+      fsGroupChangePolicy: OnRootMismatch
+
+  api-container-security-context.yaml: |
+    # Container-level security context for API
+    securityContext:
+      # Prevent privilege escalation
+      allowPrivilegeEscalation: false
+      # Read-only root filesystem
+      readOnlyRootFilesystem: true
+      # Run as non-root
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      # Drop all capabilities
+      capabilities:
+        drop:
+          - ALL
+      # Seccomp profile
+      seccompProfile:
+        type: RuntimeDefault
+
+  database-pod-security-context.yaml: |
+    # Pod-level security context for databases
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      seccompProfile:
+        type: RuntimeDefault
+
+  database-container-security-context.yaml: |
+    # Container-level security context for databases
+    # Note: Databases may need writable filesystem for data
+    securityContext:
+      allowPrivilegeEscalation: false
+      # Databases need writable filesystem
+      readOnlyRootFilesystem: false
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      capabilities:
+        drop:
+          - ALL
+---
+# Kyverno ClusterPolicy for enforcing security contexts
+# Install Kyverno first: helm install kyverno kyverno/kyverno -n kyverno --create-namespace
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-run-as-non-root
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Require Run As Non-Root
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers must run as non-root users. This policy ensures that the
+      runAsNonRoot field is set to true in all containers.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+                - open-forge-staging
+      validate:
+        message: "Running as root is not allowed. Set runAsNonRoot to true."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privilege-escalation
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Disallow Privilege Escalation
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Privilege escalation is not allowed. This policy ensures that
+      allowPrivilegeEscalation is set to false for all containers.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+                - open-forge-staging
+      validate:
+        message: "Privilege escalation is not allowed. Set allowPrivilegeEscalation to false."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false
+            =(initContainers):
+              - securityContext:
+                  allowPrivilegeEscalation: false
+            =(ephemeralContainers):
+              - securityContext:
+                  allowPrivilegeEscalation: false
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: drop-all-capabilities
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Drop All Capabilities
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers must drop all Linux capabilities. This policy ensures that
+      capabilities.drop includes ALL.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+      validate:
+        message: "All capabilities must be dropped. Add ALL to capabilities.drop."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+            =(initContainers):
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - ALL
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-read-only-root-filesystem
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Require Read-Only Root Filesystem
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Containers should use a read-only root filesystem. This policy
+      enforces readOnlyRootFilesystem for application containers.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: require-read-only-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+      exclude:
+        any:
+          - resources:
+              selector:
+                matchLabels:
+                  app.kubernetes.io/component: postgres
+          - resources:
+              selector:
+                matchLabels:
+                  app.kubernetes.io/component: minio
+      validate:
+        message: "Root filesystem should be read-only. Set readOnlyRootFilesystem to true."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  readOnlyRootFilesystem: true
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-seccomp-profile
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Require Seccomp Profile
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Pods must have a seccomp profile. This policy ensures that pods
+      use RuntimeDefault or Localhost seccomp profiles.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-seccomp
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+      validate:
+        message: "Pods must have a seccomp profile of RuntimeDefault or Localhost."
+        pattern:
+          spec:
+            securityContext:
+              seccompProfile:
+                type: RuntimeDefault | Localhost
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-host-paths
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Restrict Host Paths
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      HostPath volumes are not allowed. This policy prevents pods from
+      mounting host filesystem paths.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: restrict-host-paths
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+                - open-forge-staging
+      validate:
+        message: "HostPath volumes are not allowed."
+        pattern:
+          spec:
+            =(volumes):
+              - X(hostPath): "null"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-host-namespaces
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: security
+  annotations:
+    policies.kyverno.io/title: Disallow Host Namespaces
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Host namespaces (hostNetwork, hostPID, hostIPC) are not allowed.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - open-forge-prod
+                - open-forge-staging
+      validate:
+        message: "Host namespaces are not allowed."
+        pattern:
+          spec:
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false

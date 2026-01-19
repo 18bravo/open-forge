@@ -1,0 +1,489 @@
+# Open Forge Kubernetes Audit Policy
+# Configures what events are logged and at what level
+#
+# Audit Levels:
+#   - None: Don't log events that match this rule
+#   - Metadata: Log request metadata (user, timestamp, resource, verb) but not request/response body
+#   - Request: Log metadata and request body but not response body
+#   - RequestResponse: Log metadata, request body, and response body
+#
+# Prerequisites:
+#   1. Configure kube-apiserver with --audit-policy-file and --audit-log-path flags
+#   2. For managed Kubernetes, audit logging configuration varies by provider
+#
+# Usage with kube-apiserver:
+#   --audit-policy-file=/etc/kubernetes/audit-policy.yaml
+#   --audit-log-path=/var/log/kubernetes/audit.log
+#   --audit-log-maxage=30
+#   --audit-log-maxbackup=10
+#   --audit-log-maxsize=100
+---
+apiVersion: audit.k8s.io/v1
+kind: Policy
+metadata:
+  name: open-forge-audit-policy
+# Don't generate audit events for all requests in RequestReceived stage
+omitStages:
+  - "RequestReceived"
+rules:
+  # =============================================================================
+  # High-priority security events - Log everything
+  # =============================================================================
+
+  # Log all requests to secrets at RequestResponse level
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["secrets"]
+    namespaces: ["open-forge-prod", "open-forge-staging"]
+
+  # Log all authentication failures
+  - level: RequestResponse
+    users: ["system:anonymous"]
+    verbs: ["*"]
+
+  # Log all requests to modify RBAC
+  - level: RequestResponse
+    resources:
+      - group: "rbac.authorization.k8s.io"
+        resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+
+  # Log all requests to modify service accounts
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["serviceaccounts"]
+    verbs: ["create", "update", "patch", "delete"]
+
+  # Log all requests to modify network policies
+  - level: RequestResponse
+    resources:
+      - group: "networking.k8s.io"
+        resources: ["networkpolicies"]
+    verbs: ["create", "update", "patch", "delete"]
+
+  # Log all exec/attach requests to pods (potential backdoor)
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach", "pods/portforward"]
+
+  # Log all certificate requests
+  - level: RequestResponse
+    resources:
+      - group: "certificates.k8s.io"
+        resources: ["certificatesigningrequests"]
+
+  # Log token requests
+  - level: RequestResponse
+    resources:
+      - group: ""
+        resources: ["serviceaccounts/token"]
+
+  # =============================================================================
+  # Namespace-specific rules for Open Forge
+  # =============================================================================
+
+  # Production namespace - detailed logging
+  - level: Request
+    namespaces: ["open-forge-prod"]
+    resources:
+      - group: ""
+        resources: ["pods", "configmaps", "persistentvolumeclaims"]
+      - group: "apps"
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["create", "update", "patch", "delete"]
+
+  # Log all changes to workloads in production
+  - level: RequestResponse
+    namespaces: ["open-forge-prod"]
+    resources:
+      - group: "apps"
+        resources: ["deployments", "statefulsets"]
+    verbs: ["create", "delete"]
+
+  # Staging namespace - moderate logging
+  - level: Metadata
+    namespaces: ["open-forge-staging"]
+    resources:
+      - group: ""
+        resources: ["pods", "configmaps", "secrets"]
+      - group: "apps"
+        resources: ["deployments", "statefulsets"]
+    verbs: ["create", "update", "patch", "delete"]
+
+  # Development namespace - minimal logging
+  - level: Metadata
+    namespaces: ["open-forge-dev"]
+    resources:
+      - group: ""
+        resources: ["secrets"]
+    verbs: ["*"]
+
+  # =============================================================================
+  # Monitoring and security tool events
+  # =============================================================================
+
+  # Log Prometheus service discovery reads
+  - level: Metadata
+    users: ["system:serviceaccount:monitoring:prometheus"]
+    verbs: ["get", "list", "watch"]
+
+  # Log Trivy operator scanning activities
+  - level: Metadata
+    users: ["system:serviceaccount:trivy-system:trivy-operator"]
+    resources:
+      - group: ""
+        resources: ["pods"]
+    verbs: ["get", "list"]
+
+  # Log External Secrets operator activities
+  - level: Request
+    users: ["system:serviceaccount:external-secrets:external-secrets"]
+    resources:
+      - group: ""
+        resources: ["secrets"]
+    verbs: ["create", "update", "patch"]
+
+  # =============================================================================
+  # Exclude high-volume, low-value events
+  # =============================================================================
+
+  # Don't log requests by system:nodes (kubelet)
+  - level: None
+    users: ["system:nodes"]
+    verbs: ["get"]
+    resources:
+      - group: ""
+        resources: ["nodes", "nodes/status"]
+
+  # Don't log health checks
+  - level: None
+    nonResourceURLs:
+      - "/healthz*"
+      - "/livez*"
+      - "/readyz*"
+
+  # Don't log events from kube-system service accounts for read operations
+  - level: None
+    userGroups: ["system:serviceaccounts:kube-system"]
+    verbs: ["get", "list", "watch"]
+    resources:
+      - group: ""
+        resources: ["endpoints", "services", "configmaps"]
+
+  # Don't log watch requests (very high volume)
+  - level: None
+    verbs: ["watch"]
+    resources:
+      - group: ""
+        resources: ["events", "endpoints"]
+
+  # Don't log status updates for controllers
+  - level: None
+    users: ["system:kube-controller-manager", "system:kube-scheduler"]
+    verbs: ["update"]
+    resources:
+      - group: ""
+        resources: ["endpoints", "events"]
+
+  # Don't log lease updates (leader election)
+  - level: None
+    resources:
+      - group: "coordination.k8s.io"
+        resources: ["leases"]
+    verbs: ["update"]
+
+  # =============================================================================
+  # Default rules for remaining events
+  # =============================================================================
+
+  # Log all other mutating operations at Request level
+  - level: Request
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+
+  # Log all other read operations at Metadata level
+  - level: Metadata
+    verbs: ["get", "list"]
+
+  # Catch-all: log everything else at Metadata level
+  - level: Metadata
+---
+# Audit sink configuration (for streaming to external systems)
+# Note: AuditSink is alpha in K8s 1.13+ and may vary by version
+# Use this configuration with audit webhook backend
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-webhook-config
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: audit
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Webhook configuration for audit log streaming"
+data:
+  audit-webhook.yaml: |
+    # Audit webhook configuration
+    # Configure kube-apiserver with:
+    #   --audit-webhook-config-file=/etc/kubernetes/audit-webhook.yaml
+    #   --audit-webhook-initial-backoff=5s
+    apiVersion: v1
+    kind: Config
+    clusters:
+      - name: audit-webhook
+        cluster:
+          server: https://audit-collector.monitoring.svc:8443/audit
+          certificate-authority: /etc/kubernetes/pki/audit-ca.crt
+    contexts:
+      - name: audit-webhook
+        context:
+          cluster: audit-webhook
+    current-context: audit-webhook
+---
+# Fluentd ConfigMap for parsing audit logs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-audit-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: audit
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Fluentd configuration for parsing Kubernetes audit logs"
+data:
+  fluent.conf: |
+    # Kubernetes Audit Log Parser for Fluentd
+
+    <source>
+      @type tail
+      path /var/log/kubernetes/audit.log
+      pos_file /var/log/fluentd/audit.log.pos
+      tag kube.audit
+      read_from_head true
+      <parse>
+        @type json
+        time_key requestReceivedTimestamp
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    # Filter for Open Forge namespaces
+    <filter kube.audit>
+      @type record_transformer
+      enable_ruby true
+      <record>
+        is_open_forge ${record.dig("objectRef", "namespace")&.start_with?("open-forge") || false}
+        severity ${
+          case record["level"]
+          when "RequestResponse" then "high"
+          when "Request" then "medium"
+          when "Metadata" then "low"
+          else "info"
+          end
+        }
+      </record>
+    </filter>
+
+    # Output to Elasticsearch
+    <match kube.audit>
+      @type elasticsearch
+      host elasticsearch.monitoring.svc
+      port 9200
+      index_name k8s-audit
+      type_name _doc
+      logstash_format true
+      logstash_prefix k8s-audit
+      include_timestamp true
+      <buffer>
+        @type file
+        path /var/log/fluentd/audit-buffer
+        flush_interval 10s
+        retry_forever true
+      </buffer>
+    </match>
+---
+# Grafana Dashboard for Audit Logs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: audit-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "true"
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: audit-dashboard
+    app.kubernetes.io/part-of: open-forge-security
+data:
+  audit-dashboard.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "Kubernetes Audit Log Dashboard for Open Forge",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "title": "Audit Events by Verb",
+          "type": "piechart",
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "verb:*",
+              "metrics": [{"type": "count"}],
+              "bucketAggs": [{"field": "verb.keyword", "type": "terms"}]
+            }
+          ]
+        },
+        {
+          "title": "Events by Namespace",
+          "type": "barchart",
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "objectRef.namespace:open-forge-*",
+              "metrics": [{"type": "count"}],
+              "bucketAggs": [{"field": "objectRef.namespace.keyword", "type": "terms"}]
+            }
+          ]
+        },
+        {
+          "title": "Failed Authentication Attempts",
+          "type": "stat",
+          "gridPos": {"h": 4, "w": 8, "x": 16, "y": 0},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "responseStatus.code:401 OR responseStatus.code:403",
+              "metrics": [{"type": "count"}]
+            }
+          ]
+        },
+        {
+          "title": "Secret Access Events",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "objectRef.resource:secrets",
+              "metrics": [{"type": "count"}],
+              "bucketAggs": [{"type": "date_histogram", "field": "requestReceivedTimestamp", "settings": {"interval": "auto"}}]
+            }
+          ]
+        },
+        {
+          "title": "Pod Exec Events",
+          "type": "table",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "objectRef.subresource:exec",
+              "metrics": [{"type": "raw_document"}],
+              "bucketAggs": []
+            }
+          ]
+        },
+        {
+          "title": "RBAC Changes",
+          "type": "logs",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+          "targets": [
+            {
+              "datasource": "Elasticsearch",
+              "query": "objectRef.apiGroup:rbac.authorization.k8s.io AND (verb:create OR verb:update OR verb:delete)"
+            }
+          ]
+        }
+      ],
+      "refresh": "5m",
+      "schemaVersion": 38,
+      "tags": ["security", "audit", "kubernetes"],
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "type": "custom",
+            "options": [
+              {"text": "All", "value": "*"},
+              {"text": "open-forge-prod", "value": "open-forge-prod"},
+              {"text": "open-forge-staging", "value": "open-forge-staging"},
+              {"text": "open-forge-dev", "value": "open-forge-dev"}
+            ]
+          }
+        ]
+      },
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "title": "Open Forge - Kubernetes Audit Logs",
+      "uid": "k8s-audit"
+    }
+---
+# PrometheusRule for audit-based alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: audit-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: audit-alerts
+    app.kubernetes.io/part-of: open-forge-security
+spec:
+  groups:
+    - name: audit.rules
+      rules:
+        - alert: HighAuthenticationFailureRate
+          expr: |
+            sum(rate(apiserver_audit_event_total{responseStatus_code=~"401|403"}[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High authentication failure rate detected"
+            description: "More than 10 authentication failures per minute in the last 5 minutes"
+            runbook_url: "https://docs.open-forge.io/runbooks/auth-failures"
+
+        - alert: UnauthorizedSecretAccess
+          expr: |
+            sum(rate(apiserver_audit_event_total{objectRef_resource="secrets",user_username!~"system:.*"}[5m])) by (user_username) > 5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Unusual secret access by {{ $labels.user_username }}"
+            description: "User {{ $labels.user_username }} is accessing secrets at an unusual rate"
+
+        - alert: PodExecInProduction
+          expr: |
+            sum(rate(apiserver_audit_event_total{objectRef_subresource="exec",objectRef_namespace="open-forge-prod"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod exec detected in production"
+            description: "Someone is executing commands in a production pod"
+            runbook_url: "https://docs.open-forge.io/runbooks/pod-exec"
+
+        - alert: RBACModification
+          expr: |
+            sum(rate(apiserver_audit_event_total{objectRef_apiGroup="rbac.authorization.k8s.io",verb=~"create|update|delete"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "RBAC modification detected"
+            description: "RBAC resources are being modified in the cluster"

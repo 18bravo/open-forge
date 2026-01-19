@@ -1,0 +1,240 @@
+# Open Forge Priority Classes
+# Pod scheduling priority for resource contention scenarios
+---
+# =============================================================================
+# CRITICAL PRIORITY - Databases and essential infrastructure
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: open-forge-critical
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Critical priority for databases and essential infrastructure. Never preempted."
+# Very high priority - only system components should be higher
+value: 1000000000
+# Do not preempt other pods when scheduling
+preemptionPolicy: PreemptLowerPriority
+# Set as global default: false
+globalDefault: false
+description: |
+  Critical priority class for Open Forge databases (PostgreSQL, Redis)
+  and essential infrastructure components. These pods should never be
+  preempted and have the highest priority for scheduling.
+  Use for: postgres, redis-master, minio, essential secrets management
+---
+# =============================================================================
+# HIGH PRIORITY - API, Dagster daemon, core services
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: open-forge-high
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "High priority for API and core services"
+value: 100000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+description: |
+  High priority class for Open Forge API servers, Dagster daemon,
+  and core application services that are essential for operation.
+  Use for: api, dagster-daemon, langflow, authentication services
+---
+# =============================================================================
+# MEDIUM PRIORITY - UI, webservers, monitoring
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: open-forge-medium
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Medium priority for UI and supporting services"
+value: 1000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: true  # Default for all pods without explicit priority
+description: |
+  Medium priority class for Open Forge UI, Dagster webserver,
+  monitoring components, and supporting services.
+  Use for: ui, dagster-webserver, grafana, prometheus, alertmanager
+---
+# =============================================================================
+# LOW PRIORITY - Batch jobs, background tasks
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: open-forge-low
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Low priority for batch jobs and background tasks"
+value: 100
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+description: |
+  Low priority class for batch jobs, pipeline runs, data processing,
+  and background tasks that can be preempted if necessary.
+  Use for: dagster-run-workers, batch-jobs, data-migrations
+---
+# =============================================================================
+# BEST EFFORT - Non-essential, preemptable workloads
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: open-forge-best-effort
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Best effort priority for non-essential workloads"
+value: 1
+preemptionPolicy: Never  # Never preempt other pods
+globalDefault: false
+description: |
+  Best effort priority class for non-essential workloads that can
+  be easily terminated and rescheduled. These pods will not preempt
+  other workloads and run only when resources are available.
+  Use for: testing, development, optional background analysis
+---
+# =============================================================================
+# SYSTEM RESERVED - For cluster-critical services
+# =============================================================================
+# Note: These are typically created by the cluster itself
+# Including here for documentation and reference
+
+# apiVersion: scheduling.k8s.io/v1
+# kind: PriorityClass
+# metadata:
+#   name: system-cluster-critical
+# value: 2000000000
+# preemptionPolicy: PreemptLowerPriority
+# globalDefault: false
+# description: "System cluster critical priority (kube-system components)"
+
+# apiVersion: scheduling.k8s.io/v1
+# kind: PriorityClass
+# metadata:
+#   name: system-node-critical
+# value: 2000001000
+# preemptionPolicy: PreemptLowerPriority
+# globalDefault: false
+# description: "System node critical priority (DaemonSets, CNI)"
+---
+# =============================================================================
+# EXAMPLE USAGE IN DEPLOYMENTS
+# =============================================================================
+# Uncomment and use as reference for applying priority classes
+
+# API Deployment with high priority
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: open-forge-api
+# spec:
+#   template:
+#     spec:
+#       priorityClassName: open-forge-high
+#       containers:
+#         - name: api
+#           ...
+
+# PostgreSQL StatefulSet with critical priority
+# apiVersion: apps/v1
+# kind: StatefulSet
+# metadata:
+#   name: postgres
+# spec:
+#   template:
+#     spec:
+#       priorityClassName: open-forge-critical
+#       containers:
+#         - name: postgres
+#           ...
+
+# Dagster Run Worker Job with low priority
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: dagster-run-worker
+# spec:
+#   template:
+#     spec:
+#       priorityClassName: open-forge-low
+#       containers:
+#         - name: run-worker
+#           ...
+---
+# =============================================================================
+# PRIORITY CLASS MAPPING CONFIGMAP
+# =============================================================================
+# Reference document for which workloads should use which priority class
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: priority-class-mapping
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Documentation of priority class assignments"
+data:
+  mapping.yaml: |
+    # Priority Class Mapping for Open Forge Components
+    # This is a reference document, not functional configuration
+
+    critical:
+      value: 1000000000
+      components:
+        - postgres (StatefulSet)
+        - redis-master (StatefulSet)
+        - minio (StatefulSet)
+        - vault (if used)
+        - pgbouncer
+
+    high:
+      value: 100000
+      components:
+        - open-forge-api (Deployment)
+        - dagster-daemon (Deployment)
+        - langflow (Deployment)
+        - ingress-controller
+        - cert-manager
+
+    medium:
+      value: 1000
+      default: true
+      components:
+        - open-forge-ui (Deployment)
+        - dagster-webserver (Deployment)
+        - redis-replica (StatefulSet)
+        - redis-sentinel (StatefulSet)
+        - prometheus
+        - grafana
+        - alertmanager
+
+    low:
+      value: 100
+      components:
+        - dagster-run-worker (Job)
+        - data-migration-jobs
+        - embedding-generation-jobs
+        - batch-data-processing
+
+    best-effort:
+      value: 1
+      components:
+        - test-runners
+        - development-pods
+        - optional-analytics
+        - backup-validation

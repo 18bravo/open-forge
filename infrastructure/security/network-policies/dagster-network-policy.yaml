@@ -1,0 +1,464 @@
+# Open Forge Dagster Network Policies
+# Controls network access for Dagster webserver and daemon
+#
+# Allowed ingress:
+#   - From API service
+#   - From ingress controller (for webserver UI)
+#   - From monitoring (Prometheus scraping)
+#
+# Allowed egress:
+#   - To PostgreSQL database
+#   - To MinIO object storage
+#   - To external services for pipeline operations
+#   - To Kubernetes API for job management
+---
+# Dagster Webserver Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-webserver-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster webserver"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From API service
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 3000
+    # From ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # MinIO
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # API service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Kubernetes API server for job management
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+---
+# Dagster Daemon Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-daemon-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster daemon"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-daemon
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Daemon typically doesn't receive inbound connections
+    # but allow health checks from monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # MinIO
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # API service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Kubernetes API server for job management
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # External HTTPS for pipeline operations (downloading data, APIs, etc.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+# Dagster Run Pods Network Policy for Production
+# Applies to pods created by Dagster for pipeline runs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-run-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster run pods"
+spec:
+  podSelector:
+    matchLabels:
+      dagster/run_id: ""
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from daemon for coordination
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # MinIO
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # API service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # External HTTPS for pipeline operations
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+# Dagster Network Policies for Staging
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-webserver-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster webserver"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-daemon-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster daemon"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-daemon
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 8000
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 80
+---
+# Dagster Network Policies for Development (more permissive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster components (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dagster-daemon-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Dagster daemon (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-daemon
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 80

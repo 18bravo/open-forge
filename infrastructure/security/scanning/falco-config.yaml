@@ -1,0 +1,463 @@
+# Open Forge Falco Runtime Security Configuration
+# Provides runtime threat detection using system call monitoring
+#
+# Prerequisites:
+#   1. Install Falco: helm install falco falcosecurity/falco -n falco --create-namespace
+#   2. Kernel headers may be required for driver compilation
+#   3. For managed Kubernetes, use eBPF driver instead of kernel module
+#
+# Features:
+#   - Detects suspicious system calls
+#   - Monitors file system access
+#   - Detects network anomalies
+#   - Custom rules for Open Forge specific behaviors
+---
+# Falco Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: falco
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/part-of: open-forge-security
+    # Falco needs privileged access
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+# Falco ConfigMap - Main Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: open-forge-security
+data:
+  falco.yaml: |
+    # Falco configuration file
+
+    # Rule files
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/falco_rules.local.yaml
+      - /etc/falco/k8s_audit_rules.yaml
+      - /etc/falco/rules.d
+
+    # Watch config files for changes
+    watch_config_files: true
+
+    # Time format
+    time_format_iso_8601: true
+
+    # JSON output
+    json_output: true
+    json_include_output_property: true
+    json_include_tags_property: true
+
+    # Log configuration
+    log_stderr: true
+    log_syslog: false
+    log_level: info
+
+    # Priority level (minimum severity to alert)
+    priority: notice
+
+    # Buffered outputs
+    buffered_outputs: true
+
+    # Output channels
+    stdout_output:
+      enabled: true
+
+    # File output (optional)
+    file_output:
+      enabled: false
+      keep_alive: false
+      filename: /var/log/falco/events.txt
+
+    # HTTP output for webhook integration
+    http_output:
+      enabled: true
+      url: "http://alertmanager.monitoring:9093/api/v1/alerts"
+      user_agent: "falco/0.37.0"
+
+    # gRPC output for Falco Sidekick
+    grpc_output:
+      enabled: true
+
+    grpc:
+      enabled: true
+      bind_address: "0.0.0.0:5060"
+      threadiness: 8
+
+    # Webserver for health checks
+    webserver:
+      enabled: true
+      listen_port: 8765
+      k8s_healthz_endpoint: /healthz
+
+    # Syscall event drops
+    syscall_event_drops:
+      threshold: 0.1
+      actions:
+        - log
+        - alert
+      rate: 0.03333
+
+    # Modern eBPF driver configuration
+    engine:
+      kind: modern_ebpf
+
+    # Metadata fetch
+    metadata_download:
+      max_mb: 100
+      chunk_wait_us: 1000
+      watch_freq_sec: 1
+---
+# Falco Custom Rules for Open Forge
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules-openforge
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: rules
+    app.kubernetes.io/part-of: open-forge-security
+data:
+  open-forge-rules.yaml: |
+    # Open Forge Custom Falco Rules
+    # These rules are tailored for the Open Forge application
+
+    # =============================================================================
+    # Macros
+    # =============================================================================
+
+    - macro: open_forge_containers
+      condition: >
+        (k8s.ns.name = "open-forge-prod" or
+         k8s.ns.name = "open-forge-staging" or
+         k8s.ns.name = "open-forge-dev")
+
+    - macro: open_forge_api_container
+      condition: >
+        (container.image.repository contains "open-forge-api" or
+         k8s.pod.label.app.kubernetes.io/component = "api")
+
+    - macro: open_forge_dagster_container
+      condition: >
+        (container.image.repository contains "open-forge-dagster" or
+         k8s.pod.label.app.kubernetes.io/component startswith "dagster")
+
+    - macro: open_forge_database_container
+      condition: >
+        (k8s.pod.label.app.kubernetes.io/component = "postgres" or
+         k8s.pod.label.app.kubernetes.io/component = "redis" or
+         k8s.pod.label.app.kubernetes.io/component = "minio")
+
+    # =============================================================================
+    # Lists
+    # =============================================================================
+
+    - list: open_forge_allowed_network_ports
+      items: [8000, 5432, 6379, 9000, 3000, 7860, 443, 80]
+
+    - list: open_forge_api_allowed_binaries
+      items: [python, python3, uvicorn, gunicorn]
+
+    - list: open_forge_sensitive_files
+      items:
+        - /etc/shadow
+        - /etc/passwd
+        - /etc/kubernetes
+        - /var/run/secrets/kubernetes.io
+
+    # =============================================================================
+    # Rules - Unauthorized Access
+    # =============================================================================
+
+    - rule: Open Forge - Unauthorized Shell in Container
+      desc: Detect shell spawned in Open Forge containers
+      condition: >
+        spawned_process and
+        open_forge_containers and
+        not open_forge_dagster_container and
+        shell_procs
+      output: >
+        Shell spawned in Open Forge container
+        (user=%user.name user_uid=%user.uid shell=%proc.name
+         container=%container.id image=%container.image.repository
+         pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: WARNING
+      tags: [open-forge, shell, mitre_execution]
+
+    - rule: Open Forge - Unauthorized Package Manager
+      desc: Detect package manager execution in Open Forge containers
+      condition: >
+        spawned_process and
+        open_forge_containers and
+        package_mgmt_procs
+      output: >
+        Package manager executed in container
+        (user=%user.name command=%proc.cmdline
+         container=%container.id image=%container.image.repository
+         pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: ERROR
+      tags: [open-forge, package_management, mitre_persistence]
+
+    # =============================================================================
+    # Rules - Sensitive File Access
+    # =============================================================================
+
+    - rule: Open Forge - Sensitive File Access
+      desc: Detect access to sensitive files in Open Forge containers
+      condition: >
+        open_read and
+        open_forge_containers and
+        fd.name in (open_forge_sensitive_files)
+      output: >
+        Sensitive file accessed in Open Forge container
+        (user=%user.name file=%fd.name process=%proc.name
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: ERROR
+      tags: [open-forge, sensitive_files, mitre_credential_access]
+
+    - rule: Open Forge - Secrets Mount Access
+      desc: Detect access to Kubernetes secrets in containers
+      condition: >
+        open_read and
+        open_forge_containers and
+        fd.name startswith "/var/run/secrets/kubernetes.io"
+      output: >
+        Kubernetes secrets accessed
+        (user=%user.name file=%fd.name process=%proc.name
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: NOTICE
+      tags: [open-forge, secrets, mitre_credential_access]
+
+    # =============================================================================
+    # Rules - Network Anomalies
+    # =============================================================================
+
+    - rule: Open Forge - Unexpected Outbound Connection
+      desc: Detect unexpected outbound connections from API containers
+      condition: >
+        outbound and
+        open_forge_api_container and
+        not fd.sport in (open_forge_allowed_network_ports) and
+        not fd.sip = "127.0.0.1"
+      output: >
+        Unexpected outbound connection from API container
+        (connection=%fd.name process=%proc.name user=%user.name
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: WARNING
+      tags: [open-forge, network, mitre_exfiltration]
+
+    - rule: Open Forge - Database Direct External Access Attempt
+      desc: Detect attempts to access database from outside cluster
+      condition: >
+        inbound and
+        open_forge_database_container and
+        not fd.cip startswith "10." and
+        not fd.cip startswith "172." and
+        not fd.cip startswith "192.168."
+      output: >
+        External access attempt to database
+        (connection=%fd.name from_ip=%fd.cip
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: CRITICAL
+      tags: [open-forge, database, network, mitre_initial_access]
+
+    # =============================================================================
+    # Rules - Process Anomalies
+    # =============================================================================
+
+    - rule: Open Forge - Unexpected Process in API Container
+      desc: Detect unexpected process execution in API container
+      condition: >
+        spawned_process and
+        open_forge_api_container and
+        not proc.name in (open_forge_api_allowed_binaries) and
+        not proc.pname in (open_forge_api_allowed_binaries)
+      output: >
+        Unexpected process in API container
+        (process=%proc.name parent=%proc.pname cmdline=%proc.cmdline
+         user=%user.name container=%container.id
+         pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: WARNING
+      tags: [open-forge, process, mitre_execution]
+
+    - rule: Open Forge - Privilege Escalation Attempt
+      desc: Detect privilege escalation attempts
+      condition: >
+        open_forge_containers and
+        (setuid or setgid) and
+        not user.name = "root"
+      output: >
+        Privilege escalation attempt detected
+        (process=%proc.name user=%user.name
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: CRITICAL
+      tags: [open-forge, privilege_escalation, mitre_privilege_escalation]
+
+    # =============================================================================
+    # Rules - Cryptomining Detection
+    # =============================================================================
+
+    - rule: Open Forge - Potential Cryptominer
+      desc: Detect potential cryptomining activity
+      condition: >
+        open_forge_containers and
+        spawned_process and
+        (proc.name in (known_miners) or
+         proc.cmdline contains "stratum" or
+         proc.cmdline contains "xmrig" or
+         proc.cmdline contains "minerd")
+      output: >
+        Potential cryptominer detected
+        (process=%proc.name cmdline=%proc.cmdline
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: CRITICAL
+      tags: [open-forge, cryptominer, mitre_resource_hijacking]
+
+    # =============================================================================
+    # Rules - Data Exfiltration
+    # =============================================================================
+
+    - rule: Open Forge - Large Data Transfer
+      desc: Detect unusually large data transfers
+      condition: >
+        open_forge_containers and
+        outbound and
+        evt.rawres > 1048576
+      output: >
+        Large data transfer detected
+        (bytes=%evt.rawres connection=%fd.name process=%proc.name
+         container=%container.id pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: WARNING
+      tags: [open-forge, data_transfer, mitre_exfiltration]
+---
+# Falco Sidekick ConfigMap for alert routing
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-sidekick-config
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: falco-sidekick
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: open-forge-security
+data:
+  config.yaml: |
+    # Falco Sidekick Configuration
+    # Routes Falco alerts to various outputs
+
+    # Debug mode
+    debug: false
+
+    # Custom fields added to all alerts
+    customfields:
+      environment: production
+      application: open-forge
+
+    # Slack output
+    slack:
+      webhookurl: ""  # Set via secret
+      channel: "#security-alerts"
+      username: "Falco"
+      icon: ":shield:"
+      outputformat: "all"
+      footer: "https://github.com/falcosecurity/falco"
+      minimumpriority: "warning"
+
+    # Prometheus metrics output
+    prometheus:
+      extralabels: "app:openforge"
+
+    # Alertmanager output
+    alertmanager:
+      hostport: "http://alertmanager.monitoring:9093"
+      minimumpriority: "warning"
+      endpoint: "/api/v1/alerts"
+
+    # Elasticsearch output (optional)
+    elasticsearch:
+      hostport: ""
+      index: "falco"
+      type: "_doc"
+      minimumpriority: "notice"
+
+    # Webhook output (generic)
+    webhook:
+      address: ""
+      minimumpriority: "warning"
+---
+# Prometheus ServiceMonitor for Falco
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: falco
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: open-forge-security
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falco
+  namespaceSelector:
+    matchNames:
+      - falco
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+# PrometheusRule for Falco alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/component: alerts
+    app.kubernetes.io/part-of: open-forge-security
+spec:
+  groups:
+    - name: falco.rules
+      rules:
+        - alert: FalcoCriticalAlert
+          expr: |
+            sum(rate(falco_events{priority="Critical"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Critical Falco alert detected"
+            description: "Falco detected a critical security event in the cluster"
+            runbook_url: "https://docs.open-forge.io/runbooks/falco-critical"
+
+        - alert: FalcoHighAlertRate
+          expr: |
+            sum(rate(falco_events{priority=~"Warning|Error"}[5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High rate of Falco alerts"
+            description: "Falco is generating more than 10 warnings per minute"
+
+        - alert: FalcoNotRunning
+          expr: |
+            absent(up{job="falco"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Falco is not running"
+            description: "Falco runtime security is not operational"

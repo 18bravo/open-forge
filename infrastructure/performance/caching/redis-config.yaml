@@ -1,0 +1,402 @@
+# Open Forge Redis Performance Configuration
+# Optimized settings for caching, session management, and message queuing
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-performance-config
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "Production-optimized Redis configuration"
+data:
+  redis.conf: |
+    # =============================================================================
+    # NETWORK CONFIGURATION
+    # =============================================================================
+
+    # Bind to all interfaces (use NetworkPolicy for security)
+    bind 0.0.0.0
+    port 6379
+
+    # Disable protected mode when using authentication
+    protected-mode no
+
+    # TCP connection backlog
+    # High value for production workloads
+    tcp-backlog 2048
+
+    # Client idle timeout (0 = disabled)
+    timeout 0
+
+    # TCP keepalive to detect dead connections
+    tcp-keepalive 300
+
+    # =============================================================================
+    # GENERAL SETTINGS
+    # =============================================================================
+
+    daemonize no
+    supervised no
+    pidfile /tmp/redis.pid
+    loglevel notice
+
+    # Number of databases
+    databases 16
+
+    # Disable Redis logo
+    always-show-logo no
+
+    # =============================================================================
+    # MEMORY MANAGEMENT (Critical for Performance)
+    # =============================================================================
+
+    # Maximum memory Redis can use
+    # Set to 80% of container memory limit to leave room for OS and overhead
+    # For 2Gi container: 1638mb
+    maxmemory 1638mb
+
+    # Eviction policy when maxmemory is reached
+    # allkeys-lru: Evict least recently used keys from all keys
+    # Alternatives: volatile-lru, allkeys-lfu, volatile-lfu, volatile-random, allkeys-random, volatile-ttl, noeviction
+    maxmemory-policy allkeys-lru
+
+    # LRU clock resolution (lower = more accurate, slightly more CPU)
+    lru-clock-resolution 1000
+
+    # Number of keys to sample when running LRU algorithms
+    maxmemory-samples 10
+
+    # =============================================================================
+    # SNAPSHOTTING (RDB)
+    # =============================================================================
+
+    # RDB snapshots for durability
+    # Format: save <seconds> <changes>
+    save 900 1      # 15 min if at least 1 key changed
+    save 300 10     # 5 min if at least 10 keys changed
+    save 60 10000   # 1 min if at least 10000 keys changed
+
+    # Stop accepting writes if RDB save fails (data safety)
+    stop-writes-on-bgsave-error yes
+
+    # Enable RDB compression
+    rdbcompression yes
+
+    # Enable RDB checksum
+    rdbchecksum yes
+
+    # RDB filename and directory
+    dbfilename dump.rdb
+    dir /data
+
+    # =============================================================================
+    # APPEND ONLY FILE (AOF) - Higher Durability
+    # =============================================================================
+
+    # Enable AOF for better durability
+    appendonly yes
+    appendfilename "appendonly.aof"
+
+    # AOF fsync policy
+    # always: Safest, slowest
+    # everysec: Good balance (recommended)
+    # no: Let OS decide
+    appendfsync everysec
+
+    # Don't fsync during BGSAVE or BGREWRITEAOF (performance boost)
+    no-appendfsync-on-rewrite no
+
+    # AOF rewrite triggers
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+
+    # Load truncated AOF on startup
+    aof-load-truncated yes
+
+    # Use RDB preamble in AOF files (hybrid persistence)
+    aof-use-rdb-preamble yes
+
+    # =============================================================================
+    # CLIENT CONNECTION LIMITS
+    # =============================================================================
+
+    # Maximum number of connected clients
+    maxclients 10000
+
+    # Client output buffer limits
+    # Format: client-output-buffer-limit <class> <hard limit> <soft limit> <soft seconds>
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+
+    # =============================================================================
+    # SLOW LOG CONFIGURATION
+    # =============================================================================
+
+    # Log queries slower than this (in microseconds)
+    slowlog-log-slower-than 10000
+
+    # Maximum number of slow log entries
+    slowlog-max-len 256
+
+    # =============================================================================
+    # LATENCY MONITORING
+    # =============================================================================
+
+    # Enable latency monitoring
+    latency-monitor-threshold 100
+
+    # =============================================================================
+    # ACTIVE DEFRAGMENTATION
+    # =============================================================================
+
+    # Enable active defragmentation
+    activedefrag yes
+
+    # Start defrag when fragmentation exceeds this percentage
+    active-defrag-ignore-bytes 100mb
+    active-defrag-threshold-lower 10
+    active-defrag-threshold-upper 100
+
+    # Defrag CPU effort (1-100)
+    active-defrag-cycle-min 1
+    active-defrag-cycle-max 25
+
+    # =============================================================================
+    # LAZY FREE SETTINGS (Background deletion)
+    # =============================================================================
+
+    # Enable lazy free for various operations
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+    lazyfree-lazy-server-del yes
+    replica-lazy-flush yes
+
+    # =============================================================================
+    # THREADING (Redis 6+)
+    # =============================================================================
+
+    # Number of I/O threads for reads
+    # Set to 0 to disable (use single thread)
+    # Recommended: number of cores / 2
+    io-threads 4
+
+    # Enable threaded reads
+    io-threads-do-reads yes
+
+    # =============================================================================
+    # CLUSTER CONFIGURATION (if using Redis Cluster)
+    # =============================================================================
+
+    # Uncomment for cluster mode
+    # cluster-enabled yes
+    # cluster-config-file nodes.conf
+    # cluster-node-timeout 15000
+    # cluster-replica-validity-factor 10
+    # cluster-migration-barrier 1
+    # cluster-require-full-coverage no
+
+    # =============================================================================
+    # SECURITY
+    # =============================================================================
+
+    # Require password authentication
+    # Set via REDIS_PASSWORD environment variable or secret
+    # requirepass ${REDIS_PASSWORD}
+
+    # Disable dangerous commands
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    rename-command DEBUG ""
+    rename-command CONFIG ""
+    rename-command SHUTDOWN SHUTDOWN_SECURE
+
+    # =============================================================================
+    # EVENT NOTIFICATION (for cache invalidation)
+    # =============================================================================
+
+    # Enable keyspace notifications
+    # K: Keyspace events
+    # E: Keyevent events
+    # x: Expired events
+    # e: Evicted events
+    # A: All events
+    notify-keyspace-events "KEA"
+---
+# Redis Performance ConfigMap for Development
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-performance-config-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    environment: dev
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    daemonize no
+    databases 16
+
+    # Lower memory for dev
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+
+    # Less aggressive persistence for dev
+    save 900 1
+    save 300 10
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    dbfilename dump.rdb
+    dir /data
+
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+
+    maxclients 1000
+
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    notify-keyspace-events "KEA"
+---
+# Redis Performance ConfigMap for Staging
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-performance-config-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    environment: staging
+data:
+  redis.conf: |
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    tcp-backlog 1024
+    timeout 0
+    tcp-keepalive 300
+
+    daemonize no
+    databases 16
+
+    # Moderate memory for staging
+    maxmemory 768mb
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 10
+
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+
+    maxclients 5000
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit pubsub 32mb 8mb 60
+
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    latency-monitor-threshold 100
+
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+
+    io-threads 2
+    io-threads-do-reads yes
+
+    notify-keyspace-events "KEA"
+---
+# Redis Deployment with Performance Configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-performance
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/managed-by: open-forge-performance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-forge
+        app.kubernetes.io/component: redis
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+          volumeMounts:
+            - name: redis-config
+              mountPath: /etc/redis
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-performance-config
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data

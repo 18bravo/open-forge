@@ -1,0 +1,408 @@
+# Open Forge LimitRanges
+# Default and max/min resource constraints for pods and containers
+---
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT
+# =============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: dev
+  annotations:
+    description: "Resource limits for development environment"
+spec:
+  limits:
+    # Container limits
+    - type: Container
+      # Default requests if not specified
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      # Default limits if not specified
+      default:
+        cpu: 500m
+        memory: 512Mi
+      # Minimum allowed
+      min:
+        cpu: 10m
+        memory: 16Mi
+      # Maximum allowed
+      max:
+        cpu: 2
+        memory: 4Gi
+      # Max ratio of limit to request
+      maxLimitRequestRatio:
+        cpu: "10"
+        memory: "4"
+
+    # Pod limits (aggregate of all containers)
+    - type: Pod
+      min:
+        cpu: 10m
+        memory: 16Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+
+    # PVC limits
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 50Gi
+---
+# =============================================================================
+# STAGING ENVIRONMENT
+# =============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: staging
+  annotations:
+    description: "Resource limits for staging environment"
+spec:
+  limits:
+    # Container limits
+    - type: Container
+      defaultRequest:
+        cpu: 200m
+        memory: 256Mi
+      default:
+        cpu: 1
+        memory: 1Gi
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+      maxLimitRequestRatio:
+        cpu: "8"
+        memory: "4"
+
+    # Pod limits
+    - type: Pod
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: 8
+        memory: 16Gi
+
+    # PVC limits
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 100Gi
+---
+# =============================================================================
+# PRODUCTION ENVIRONMENT
+# =============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+    environment: prod
+  annotations:
+    description: "Resource limits for production environment"
+spec:
+  limits:
+    # Container limits - production defaults
+    - type: Container
+      defaultRequest:
+        cpu: 250m
+        memory: 512Mi
+      default:
+        cpu: 1
+        memory: 2Gi
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: 8
+        memory: 16Gi
+      maxLimitRequestRatio:
+        cpu: "4"
+        memory: "2"
+
+    # Pod limits
+    - type: Pod
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: 16
+        memory: 32Gi
+
+    # PVC limits
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 500Gi
+---
+# =============================================================================
+# SPECIALIZED LIMIT RANGES
+# =============================================================================
+
+# LimitRange for API workloads
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-api
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    environment: prod
+  annotations:
+    description: "Resource limits for API pods"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 250m
+        memory: 512Mi
+      default:
+        cpu: 1
+        memory: 2Gi
+      min:
+        cpu: 100m
+        memory: 256Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+---
+# LimitRange for Dagster workloads
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-dagster
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+    environment: prod
+  annotations:
+    description: "Resource limits for Dagster pods"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 250m
+        memory: 512Mi
+      default:
+        cpu: 1
+        memory: 2Gi
+      min:
+        cpu: 100m
+        memory: 256Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+---
+# LimitRange for Database workloads
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-database
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: database
+    environment: prod
+  annotations:
+    description: "Resource limits for database pods"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 500m
+        memory: 1Gi
+      default:
+        cpu: 2
+        memory: 4Gi
+      min:
+        cpu: 250m
+        memory: 512Mi
+      max:
+        cpu: 8
+        memory: 16Gi
+    - type: PersistentVolumeClaim
+      min:
+        storage: 10Gi
+      max:
+        storage: 500Gi
+---
+# LimitRange for Batch/Job workloads
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-batch
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: batch
+    environment: prod
+  annotations:
+    description: "Resource limits for batch job pods"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 256Mi
+      default:
+        cpu: 500m
+        memory: 1Gi
+      min:
+        cpu: 50m
+        memory: 128Mi
+      max:
+        cpu: 4
+        memory: 8Gi
+      maxLimitRequestRatio:
+        cpu: "10"
+        memory: "4"
+---
+# LimitRange for UI workloads
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-ui
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    environment: prod
+  annotations:
+    description: "Resource limits for UI pods"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 250m
+        memory: 256Mi
+      min:
+        cpu: 25m
+        memory: 32Mi
+      max:
+        cpu: 1
+        memory: 1Gi
+---
+# LimitRange for Sidecar containers
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-sidecar
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+  annotations:
+    description: "Resource limits for sidecar containers (exporters, proxies)"
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 10m
+        memory: 16Mi
+      default:
+        cpu: 50m
+        memory: 64Mi
+      min:
+        cpu: 5m
+        memory: 8Mi
+      max:
+        cpu: 200m
+        memory: 256Mi
+---
+# =============================================================================
+# EPHEMERAL STORAGE LIMITS
+# =============================================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-ephemeral-prod
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: prod
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        ephemeral-storage: 100Mi
+      default:
+        ephemeral-storage: 1Gi
+      min:
+        ephemeral-storage: 10Mi
+      max:
+        ephemeral-storage: 10Gi
+    - type: Pod
+      max:
+        ephemeral-storage: 20Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-ephemeral-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: staging
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        ephemeral-storage: 100Mi
+      default:
+        ephemeral-storage: 500Mi
+      min:
+        ephemeral-storage: 10Mi
+      max:
+        ephemeral-storage: 5Gi
+    - type: Pod
+      max:
+        ephemeral-storage: 10Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limit-range-ephemeral-dev
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    environment: dev
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        ephemeral-storage: 50Mi
+      default:
+        ephemeral-storage: 200Mi
+      min:
+        ephemeral-storage: 10Mi
+      max:
+        ephemeral-storage: 2Gi
+    - type: Pod
+      max:
+        ephemeral-storage: 5Gi

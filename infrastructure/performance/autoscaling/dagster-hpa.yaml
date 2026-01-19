@@ -1,0 +1,199 @@
+# Open Forge Dagster HorizontalPodAutoscaler
+# Autoscaling for Dagster webserver and daemon components
+# Note: Dagster daemon should typically run as a single instance
+---
+# Dagster Webserver HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dagster-webserver-hpa
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "HPA for Dagster webserver with CPU and memory scaling"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dagster-webserver
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    # CPU utilization
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # Memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: GraphQL queries per second
+    - type: Pods
+      pods:
+        metric:
+          name: dagster_graphql_queries_per_second
+        target:
+          type: AverageValue
+          averageValue: "50"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+      selectPolicy: Max
+---
+# Dagster Daemon Scaling Configuration
+# The daemon is typically run as a singleton, but this provides
+# a framework for scaling based on run queue depth if needed
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dagster-daemon-hpa
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-daemon
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "HPA for Dagster daemon based on queue depth"
+    warning: "Dagster daemon is designed as singleton - use with caution"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dagster-daemon
+  # Keep daemon as mostly singleton, scale only under extreme load
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    # CPU utilization - daemon can be CPU intensive during scheduling
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    # Custom metric: Run queue length
+    # This metric tracks the number of runs waiting to be executed
+    - type: External
+      external:
+        metric:
+          name: dagster_run_queue_length
+          selector:
+            matchLabels:
+              namespace: open-forge
+        target:
+          type: Value
+          value: "10"
+    # Custom metric: Pending sensors
+    - type: External
+      external:
+        metric:
+          name: dagster_pending_sensors
+          selector:
+            matchLabels:
+              namespace: open-forge
+        target:
+          type: Value
+          value: "20"
+  behavior:
+    # Very conservative scale down to maintain daemon stability
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+      selectPolicy: Min
+    # Conservative scale up
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min
+---
+# Dagster Run Worker KEDA ScaledObject (alternative approach)
+# Use KEDA for more sophisticated event-driven scaling
+# Requires: KEDA operator installed
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: dagster-run-worker-scaledobject
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-run-worker
+spec:
+  scaleTargetRef:
+    name: dagster-run-worker
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  triggers:
+    # Scale based on Dagster run queue length from Prometheus
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: dagster_run_queue_length
+        query: |
+          dagster_daemon_run_coordinator_pending_runs{namespace="open-forge"}
+        threshold: "5"
+    # Scale based on PostgreSQL queue depth
+    - type: postgresql
+      metadata:
+        targetQueryValue: "10"
+        connectionFromEnv: DAGSTER_POSTGRES_CONNECTION_STRING
+        query: |
+          SELECT COUNT(*) FROM runs
+          WHERE status = 'QUEUED'
+          AND created_at > NOW() - INTERVAL '1 hour'
+---
+# PrometheusRule for Dagster metrics aggregation
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dagster-autoscaling-metrics
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+spec:
+  groups:
+    - name: dagster.autoscaling
+      interval: 30s
+      rules:
+        # Run queue length aggregation
+        - record: dagster_run_queue_length
+          expr: |
+            sum(dagster_daemon_run_coordinator_pending_runs{namespace="open-forge"})
+        # Pending sensor evaluations
+        - record: dagster_pending_sensors
+          expr: |
+            sum(dagster_daemon_pending_sensor_ticks{namespace="open-forge"})
+        # Active pipeline runs
+        - record: dagster_active_runs
+          expr: |
+            count(dagster_run_status{status="STARTED",namespace="open-forge"})

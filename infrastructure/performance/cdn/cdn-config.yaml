@@ -1,0 +1,662 @@
+# Open Forge CDN Configuration Reference
+# Content Delivery Network configuration for static assets and API acceleration
+# This file provides reference configurations for various CDN providers
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cdn-config
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: cdn
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/managed-by: open-forge-performance
+  annotations:
+    description: "CDN configuration reference for Open Forge"
+data:
+  # =============================================================================
+  # CDN CONFIGURATION OVERVIEW
+  # =============================================================================
+  config-overview.yaml: |
+    # Open Forge CDN Configuration Overview
+    #
+    # This document provides reference configurations for CDN providers.
+    # The actual CDN setup depends on your chosen provider.
+    #
+    # Supported CDN Providers:
+    # - CloudFlare
+    # - AWS CloudFront
+    # - Google Cloud CDN
+    # - Fastly
+    # - Azure CDN
+    #
+    # Content Types to Cache:
+    # - Static UI assets (JS, CSS, images, fonts)
+    # - API responses (with appropriate cache-control headers)
+    # - Public documentation
+    #
+    # Cache-Control Headers Strategy:
+    # - Static assets: long TTL with versioned URLs
+    # - API GET responses: short TTL or stale-while-revalidate
+    # - Dynamic content: no-cache or private
+
+  # =============================================================================
+  # CLOUDFLARE CONFIGURATION
+  # =============================================================================
+  cloudflare-config.yaml: |
+    # CloudFlare CDN Configuration
+    # Apply via CloudFlare dashboard or Terraform provider
+
+    zone_settings:
+      # SSL/TLS Settings
+      ssl: "full_strict"
+      min_tls_version: "1.2"
+      automatic_https_rewrites: "on"
+      always_use_https: "on"
+
+      # Caching Settings
+      browser_cache_ttl: 14400  # 4 hours for general content
+      cache_level: "aggressive"
+      development_mode: "off"
+
+      # Performance
+      minify:
+        css: "on"
+        html: "on"
+        js: "on"
+      brotli: "on"
+      polish: "lossless"  # Image optimization
+
+      # Security
+      security_level: "medium"
+      challenge_ttl: 1800
+      browser_check: "on"
+      waf: "on"
+
+      # HTTP/2 & HTTP/3
+      http2: "on"
+      http3: "on"
+      zero_rtt: "on"
+
+      # Websockets (for real-time features)
+      websockets: "on"
+
+    page_rules:
+      # Static assets - aggressive caching
+      - targets:
+          - "*.openforge.example.com/_next/static/*"
+          - "*.openforge.example.com/assets/*"
+        actions:
+          cache_level: "cache_everything"
+          edge_cache_ttl: 2592000  # 30 days
+          browser_cache_ttl: 2592000
+
+      # API responses - selective caching
+      - targets:
+          - "api.openforge.example.com/api/v1/public/*"
+        actions:
+          cache_level: "cache_everything"
+          edge_cache_ttl: 300  # 5 minutes
+          origin_cache_control: "on"
+
+      # WebSocket endpoints - bypass cache
+      - targets:
+          - "api.openforge.example.com/ws/*"
+        actions:
+          cache_level: "bypass"
+
+      # Health endpoints - bypass cache
+      - targets:
+          - "*/health"
+          - "*/healthz"
+          - "*/ready"
+        actions:
+          cache_level: "bypass"
+
+    cache_rules:
+      # Static assets by extension
+      static_extensions:
+        - js
+        - css
+        - png
+        - jpg
+        - jpeg
+        - gif
+        - svg
+        - ico
+        - woff
+        - woff2
+        - ttf
+        - eot
+      cache_ttl: 2592000  # 30 days
+
+      # API caching rules
+      api_cache:
+        methods:
+          - GET
+          - HEAD
+        default_ttl: 60
+        respect_origin_headers: true
+        stale_while_revalidate: 60
+        stale_if_error: 300
+
+  # =============================================================================
+  # AWS CLOUDFRONT CONFIGURATION
+  # =============================================================================
+  cloudfront-config.yaml: |
+    # AWS CloudFront Distribution Configuration
+    # Apply via AWS Console, CLI, or Terraform
+
+    distribution:
+      aliases:
+        - "openforge.example.com"
+        - "*.openforge.example.com"
+
+      default_cache_behavior:
+        allowed_methods:
+          - GET
+          - HEAD
+          - OPTIONS
+        cached_methods:
+          - GET
+          - HEAD
+        target_origin_id: "open-forge-origin"
+        viewer_protocol_policy: "redirect-to-https"
+        compress: true
+
+        # Managed cache policy: CachingOptimized
+        cache_policy_id: "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+        # Managed origin request policy: AllViewer
+        origin_request_policy_id: "216adef6-5c7f-47e4-b989-5492eafa07d3"
+
+        # Response headers policy
+        response_headers_policy:
+          cors_config:
+            access_control_allow_credentials: false
+            access_control_allow_headers:
+              items:
+                - "*"
+            access_control_allow_methods:
+              items:
+                - GET
+                - HEAD
+                - OPTIONS
+            access_control_allow_origins:
+              items:
+                - "https://openforge.example.com"
+            access_control_max_age_sec: 86400
+          security_headers_config:
+            strict_transport_security:
+              access_control_max_age_sec: 31536000
+              include_subdomains: true
+              preload: true
+            content_type_options:
+              override: true
+            frame_options:
+              frame_option: "DENY"
+              override: true
+            xss_protection:
+              mode_block: true
+              protection: true
+              override: true
+
+      cache_behaviors:
+        # Static assets - long cache
+        - path_pattern: "/_next/static/*"
+          target_origin_id: "open-forge-ui-origin"
+          viewer_protocol_policy: "redirect-to-https"
+          compress: true
+          default_ttl: 2592000
+          max_ttl: 31536000
+          min_ttl: 2592000
+
+        # API caching
+        - path_pattern: "/api/v1/public/*"
+          target_origin_id: "open-forge-api-origin"
+          viewer_protocol_policy: "redirect-to-https"
+          allowed_methods:
+            - GET
+            - HEAD
+            - OPTIONS
+          compress: true
+          default_ttl: 60
+          max_ttl: 300
+          min_ttl: 0
+          forwarded_values:
+            query_string: true
+            headers:
+              - Accept
+              - Accept-Encoding
+              - Accept-Language
+              - Authorization
+
+        # No cache for dynamic API
+        - path_pattern: "/api/*"
+          target_origin_id: "open-forge-api-origin"
+          viewer_protocol_policy: "redirect-to-https"
+          allowed_methods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          default_ttl: 0
+          max_ttl: 0
+          min_ttl: 0
+          forwarded_values:
+            query_string: true
+            headers:
+              - "*"
+            cookies:
+              forward: "all"
+
+      origins:
+        - id: "open-forge-ui-origin"
+          domain_name: "ui.openforge.internal"
+          custom_origin_config:
+            http_port: 80
+            https_port: 443
+            origin_protocol_policy: "https-only"
+            origin_ssl_protocols:
+              - "TLSv1.2"
+            origin_read_timeout: 30
+            origin_keepalive_timeout: 5
+
+        - id: "open-forge-api-origin"
+          domain_name: "api.openforge.internal"
+          custom_origin_config:
+            http_port: 80
+            https_port: 443
+            origin_protocol_policy: "https-only"
+            origin_ssl_protocols:
+              - "TLSv1.2"
+            origin_read_timeout: 60
+            origin_keepalive_timeout: 30
+
+      # Price class
+      price_class: "PriceClass_100"  # US, Canada, Europe
+
+      # Logging
+      logging_config:
+        bucket: "openforge-cdn-logs.s3.amazonaws.com"
+        prefix: "cloudfront/"
+        include_cookies: false
+
+      # WAF
+      web_acl_id: "arn:aws:wafv2:us-east-1:ACCOUNT:global/webacl/openforge-waf/ID"
+
+  # =============================================================================
+  # GOOGLE CLOUD CDN CONFIGURATION
+  # =============================================================================
+  gcloud-cdn-config.yaml: |
+    # Google Cloud CDN Configuration
+    # Apply via gcloud CLI or Terraform
+
+    backend_service:
+      name: "open-forge-backend"
+      enable_cdn: true
+      cdn_policy:
+        cache_mode: "USE_ORIGIN_HEADERS"
+        default_ttl: 3600
+        max_ttl: 86400
+        client_ttl: 3600
+        negative_caching: true
+        negative_caching_policy:
+          - code: 404
+            ttl: 60
+          - code: 502
+            ttl: 10
+        serve_while_stale: 86400
+        signed_url_cache_max_age_sec: 0
+        cache_key_policy:
+          include_host: true
+          include_protocol: true
+          include_query_string: true
+
+    url_map:
+      name: "open-forge-url-map"
+      host_rules:
+        - hosts:
+            - "openforge.example.com"
+          path_matcher: "main"
+      path_matchers:
+        - name: "main"
+          default_service: "open-forge-ui-backend"
+          path_rules:
+            # Static assets
+            - paths:
+                - "/_next/static/*"
+                - "/assets/*"
+              service: "open-forge-static-backend"
+              route_action:
+                cdn_policy:
+                  cache_mode: "FORCE_CACHE_ALL"
+                  default_ttl: 2592000
+            # API
+            - paths:
+                - "/api/*"
+              service: "open-forge-api-backend"
+              route_action:
+                cdn_policy:
+                  cache_mode: "USE_ORIGIN_HEADERS"
+
+    security_policy:
+      name: "open-forge-security-policy"
+      rules:
+        - action: "allow"
+          priority: 1000
+          match:
+            versioned_expr: "SRC_IPS_V1"
+            config:
+              src_ip_ranges:
+                - "*"
+          description: "Default allow rule"
+        - action: "rate_based_ban"
+          priority: 100
+          rate_limit_options:
+            conform_action: "allow"
+            exceed_action: "deny(429)"
+            rate_limit_threshold:
+              count: 1000
+              interval_sec: 60
+
+  # =============================================================================
+  # FASTLY CONFIGURATION
+  # =============================================================================
+  fastly-config.yaml: |
+    # Fastly CDN Configuration (VCL snippets)
+    # Apply via Fastly dashboard or API
+
+    vcl_recv: |
+      # Normalize request path
+      set req.url = std.tolower(req.url);
+
+      # Static assets - set long TTL
+      if (req.url ~ "^/_next/static/" ||
+          req.url ~ "^/assets/" ||
+          req.url ~ "\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$") {
+        set req.http.X-Cache-Type = "static";
+        return(lookup);
+      }
+
+      # API public endpoints - short cache
+      if (req.url ~ "^/api/v1/public/") {
+        set req.http.X-Cache-Type = "api-public";
+        return(lookup);
+      }
+
+      # API private endpoints - no cache
+      if (req.url ~ "^/api/") {
+        set req.http.X-Cache-Type = "api-private";
+        return(pass);
+      }
+
+      # Health checks - bypass
+      if (req.url ~ "^/health" || req.url ~ "^/healthz") {
+        return(pass);
+      }
+
+    vcl_fetch: |
+      # Static assets TTL
+      if (req.http.X-Cache-Type == "static") {
+        set beresp.ttl = 30d;
+        set beresp.http.Cache-Control = "public, max-age=2592000, immutable";
+        unset beresp.http.Set-Cookie;
+      }
+
+      # API public endpoints TTL
+      if (req.http.X-Cache-Type == "api-public") {
+        if (!beresp.http.Cache-Control) {
+          set beresp.ttl = 60s;
+          set beresp.http.Cache-Control = "public, max-age=60, stale-while-revalidate=60";
+        }
+      }
+
+      # Enable stale-while-revalidate
+      set beresp.stale_while_revalidate = 60s;
+      set beresp.stale_if_error = 300s;
+
+      # Grace period
+      set beresp.grace = 1h;
+
+    vcl_deliver: |
+      # Add cache status header for debugging
+      if (obj.hits > 0) {
+        set resp.http.X-Cache = "HIT";
+        set resp.http.X-Cache-Hits = obj.hits;
+      } else {
+        set resp.http.X-Cache = "MISS";
+      }
+
+      # Remove internal headers
+      unset resp.http.X-Cache-Type;
+
+  # =============================================================================
+  # NGINX INGRESS CDN HEADERS
+  # =============================================================================
+  nginx-cache-headers.yaml: |
+    # Nginx Ingress annotations for CDN-friendly caching
+    # Apply to Ingress resources
+
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: open-forge-ui-ingress
+      namespace: open-forge
+      annotations:
+        # Cache-Control headers
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          # Static assets
+          location ~* ^/_next/static/ {
+            add_header Cache-Control "public, max-age=2592000, immutable";
+            add_header X-Content-Type-Options "nosniff";
+          }
+
+          # Assets directory
+          location ~* ^/assets/ {
+            add_header Cache-Control "public, max-age=2592000, immutable";
+            add_header X-Content-Type-Options "nosniff";
+          }
+
+          # Common static file extensions
+          location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$ {
+            add_header Cache-Control "public, max-age=2592000, immutable";
+            add_header X-Content-Type-Options "nosniff";
+          }
+
+          # API public endpoints
+          location ~* ^/api/v1/public/ {
+            add_header Cache-Control "public, max-age=60, stale-while-revalidate=60";
+          }
+
+          # API private endpoints - no cache
+          location ~* ^/api/ {
+            add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate";
+            add_header Pragma "no-cache";
+            add_header Expires "0";
+          }
+
+        # Enable gzip compression
+        nginx.ingress.kubernetes.io/enable-brotli: "true"
+        nginx.ingress.kubernetes.io/brotli-level: "6"
+        nginx.ingress.kubernetes.io/enable-gzip: "true"
+        nginx.ingress.kubernetes.io/gzip-level: "6"
+        nginx.ingress.kubernetes.io/gzip-types: "application/json application/javascript text/css text/plain text/html application/xml"
+
+  # =============================================================================
+  # APPLICATION CACHE-CONTROL HEADERS
+  # =============================================================================
+  app-cache-headers.yaml: |
+    # Cache-Control header recommendations for the application
+    # Implement in FastAPI/Next.js applications
+
+    # FastAPI example (packages/api/app/middleware/cache.py):
+    #
+    # from fastapi import Request, Response
+    # from starlette.middleware.base import BaseHTTPMiddleware
+    #
+    # class CacheControlMiddleware(BaseHTTPMiddleware):
+    #     async def dispatch(self, request: Request, call_next):
+    #         response = await call_next(request)
+    #
+    #         # Public API endpoints
+    #         if request.url.path.startswith("/api/v1/public/"):
+    #             response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=60"
+    #             response.headers["Vary"] = "Accept, Accept-Encoding"
+    #
+    #         # Private API endpoints
+    #         elif request.url.path.startswith("/api/"):
+    #             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    #             response.headers["Pragma"] = "no-cache"
+    #
+    #         # Health endpoints
+    #         elif request.url.path in ["/health", "/healthz", "/ready"]:
+    #             response.headers["Cache-Control"] = "no-store"
+    #
+    #         return response
+
+    # Next.js example (pages/api/[...slug].ts):
+    #
+    # // For static pages
+    # export async function getStaticProps() {
+    #   return {
+    #     props: {},
+    #     revalidate: 60, // ISR: revalidate every 60 seconds
+    #   }
+    # }
+    #
+    # // For API routes
+    # export default function handler(req, res) {
+    #   res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=30')
+    #   // ... rest of handler
+    # }
+
+    cache_control_values:
+      # Static assets (versioned URLs)
+      static_immutable:
+        header: "public, max-age=31536000, immutable"
+        use_for:
+          - "/_next/static/*"
+          - "/assets/*"
+          - "Hashed/versioned file URLs"
+
+      # Public API responses
+      api_public:
+        header: "public, max-age=60, stale-while-revalidate=60, stale-if-error=300"
+        use_for:
+          - "/api/v1/public/config"
+          - "/api/v1/public/status"
+          - "Public reference data"
+
+      # Private API responses
+      api_private:
+        header: "private, no-store, no-cache, must-revalidate"
+        use_for:
+          - "/api/v1/engagements/*"
+          - "/api/v1/agents/*"
+          - "User-specific data"
+
+      # Dynamic HTML pages
+      html_dynamic:
+        header: "private, max-age=0, must-revalidate"
+        use_for:
+          - "Dashboard pages"
+          - "User profile pages"
+
+      # Semi-static HTML pages
+      html_semi_static:
+        header: "public, max-age=300, stale-while-revalidate=60"
+        use_for:
+          - "Documentation pages"
+          - "Landing pages"
+---
+# CDN Cache Invalidation Job
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cdn-cache-warmup
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: cdn
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: cache-warmup
+              image: curlimages/curl:8.5.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Warm up critical endpoints
+                  URLS="
+                  https://openforge.example.com/
+                  https://openforge.example.com/api/v1/public/config
+                  https://openforge.example.com/api/v1/public/status
+                  "
+
+                  for url in $URLS; do
+                    echo "Warming: $url"
+                    curl -s -o /dev/null -w "%{http_code}" "$url"
+                  done
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+          restartPolicy: OnFailure
+---
+# ServiceMonitor for CDN metrics (if using Prometheus)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cdn-alerts
+  namespace: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: cdn
+spec:
+  groups:
+    - name: cdn.alerts
+      rules:
+        # Alert on low cache hit rate
+        - alert: CDNCacheHitRateLow
+          expr: |
+            (
+              sum(rate(nginx_ingress_controller_request_size_count{status=~"2.."}[5m]))
+              -
+              sum(rate(nginx_ingress_controller_upstream_requests_total[5m]))
+            )
+            /
+            sum(rate(nginx_ingress_controller_request_size_count{status=~"2.."}[5m]))
+            < 0.5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CDN cache hit rate below 50%"
+            description: "The CDN cache hit rate has been below 50% for 15 minutes. Consider reviewing caching configuration."
+
+        # Alert on high origin latency
+        - alert: CDNOriginLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(nginx_ingress_controller_response_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency to origin servers"
+            description: "P95 latency to origin servers exceeds 2 seconds. This may indicate origin server issues or CDN misconfiguration."

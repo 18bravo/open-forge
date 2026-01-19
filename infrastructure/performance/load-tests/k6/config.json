@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Forge Load Test Configuration",
+  "description": "Configuration for k6 load testing scenarios",
+
+  "environments": {
+    "local": {
+      "api_url": "http://localhost:8000",
+      "dagster_url": "http://localhost:3000",
+      "ui_url": "http://localhost:3001",
+      "description": "Local development environment"
+    },
+    "dev": {
+      "api_url": "https://api.dev.openforge.example.com",
+      "dagster_url": "https://dagster.dev.openforge.example.com",
+      "ui_url": "https://dev.openforge.example.com",
+      "description": "Development environment"
+    },
+    "staging": {
+      "api_url": "https://api.staging.openforge.example.com",
+      "dagster_url": "https://dagster.staging.openforge.example.com",
+      "ui_url": "https://staging.openforge.example.com",
+      "description": "Staging environment"
+    },
+    "prod": {
+      "api_url": "https://api.openforge.example.com",
+      "dagster_url": "https://dagster.openforge.example.com",
+      "ui_url": "https://openforge.example.com",
+      "description": "Production environment (use with caution)"
+    }
+  },
+
+  "scenarios": {
+    "smoke": {
+      "description": "Quick validation test",
+      "vus": 1,
+      "duration": "1m",
+      "use_cases": [
+        "CI/CD pipeline validation",
+        "Post-deployment health check",
+        "Quick sanity test"
+      ],
+      "thresholds": {
+        "http_req_duration_p95": 500,
+        "error_rate": 0.01
+      }
+    },
+    "load": {
+      "description": "Standard load test simulating normal traffic",
+      "vus_max": 50,
+      "duration": "10m",
+      "ramp_up": "2m",
+      "ramp_down": "1m",
+      "use_cases": [
+        "Baseline performance measurement",
+        "Capacity planning",
+        "Regular load testing"
+      ],
+      "thresholds": {
+        "http_req_duration_p95": 500,
+        "http_req_duration_p99": 1000,
+        "error_rate": 0.05
+      }
+    },
+    "stress": {
+      "description": "Stress test to find system limits",
+      "vus_max": 200,
+      "duration": "20m",
+      "use_cases": [
+        "Finding breaking point",
+        "Identifying bottlenecks",
+        "Capacity limits testing"
+      ],
+      "thresholds": {
+        "http_req_duration_p95": 2000,
+        "error_rate": 0.1
+      }
+    },
+    "spike": {
+      "description": "Sudden traffic spike simulation",
+      "vus_spike": 200,
+      "spike_duration": "1m",
+      "total_duration": "6m",
+      "use_cases": [
+        "Testing auto-scaling",
+        "Simulating viral traffic",
+        "Flash sale scenarios"
+      ],
+      "thresholds": {
+        "http_req_duration_p95": 3000,
+        "error_rate": 0.15
+      }
+    },
+    "soak": {
+      "description": "Extended duration test for stability",
+      "vus": 30,
+      "duration": "2h",
+      "use_cases": [
+        "Memory leak detection",
+        "Connection pool exhaustion",
+        "Long-term stability"
+      ],
+      "thresholds": {
+        "http_req_duration_p95": 500,
+        "error_rate": 0.02
+      }
+    }
+  },
+
+  "thresholds": {
+    "global": {
+      "http_req_duration": {
+        "p95": 500,
+        "p99": 1000,
+        "description": "95% of requests should complete within 500ms"
+      },
+      "http_req_failed": {
+        "rate": 0.05,
+        "description": "Less than 5% of requests should fail"
+      }
+    },
+    "by_endpoint": {
+      "health": {
+        "p95": 100,
+        "description": "Health checks should be very fast"
+      },
+      "list_engagements": {
+        "p95": 300,
+        "description": "Listing should complete quickly"
+      },
+      "create_engagement": {
+        "p95": 1000,
+        "description": "Creation involves database write"
+      },
+      "submit_task": {
+        "p95": 2000,
+        "description": "Task submission may involve queue operations"
+      },
+      "query_datasource": {
+        "p95": 1500,
+        "description": "Data source queries vary by complexity"
+      },
+      "trigger_pipeline": {
+        "p95": 5000,
+        "description": "Pipeline triggering involves orchestrator"
+      },
+      "graphql": {
+        "p95": 2000,
+        "description": "GraphQL queries to Dagster"
+      }
+    }
+  },
+
+  "test_data": {
+    "engagement": {
+      "name_prefix": "Load Test Engagement",
+      "client_name_prefix": "Test Client",
+      "statuses": ["active", "in_progress", "completed"]
+    },
+    "agent_task": {
+      "types": ["analysis", "extraction", "summarization", "classification"],
+      "priority_range": [1, 5],
+      "max_tokens_range": [500, 2000]
+    },
+    "pipeline": {
+      "names": ["data_ingestion", "embedding_generation", "report_generation"],
+      "modes": ["default", "development", "production"]
+    }
+  },
+
+  "metrics_export": {
+    "influxdb": {
+      "enabled": false,
+      "url": "http://influxdb:8086",
+      "database": "k6_metrics",
+      "tags": {
+        "project": "open-forge",
+        "test_type": "load"
+      }
+    },
+    "prometheus": {
+      "enabled": false,
+      "push_gateway": "http://prometheus-pushgateway:9091"
+    },
+    "json": {
+      "enabled": true,
+      "output_dir": "./results"
+    }
+  },
+
+  "run_examples": {
+    "smoke_local": "k6 run api-load.js --env SCENARIO=smoke",
+    "load_staging": "k6 run api-load.js --env BASE_URL=https://api.staging.openforge.example.com --env SCENARIO=load",
+    "stress_with_token": "k6 run api-load.js --env BASE_URL=https://api.openforge.example.com --env API_TOKEN=your_token --env SCENARIO=stress",
+    "pipeline_concurrent": "k6 run pipeline-load.js --env DAGSTER_URL=https://dagster.staging.openforge.example.com --env SCENARIO=concurrent",
+    "with_influx": "k6 run api-load.js --out influxdb=http://influxdb:8086/k6_metrics",
+    "with_json_output": "k6 run api-load.js --out json=results/output.json"
+  },
+
+  "ci_cd_integration": {
+    "github_actions": {
+      "trigger_on": ["pull_request", "push_to_main"],
+      "scenarios": ["smoke"],
+      "fail_on_threshold_breach": true
+    },
+    "post_deployment": {
+      "scenarios": ["smoke", "load"],
+      "wait_for_deployment": "60s",
+      "notify_on_failure": true
+    }
+  }
+}

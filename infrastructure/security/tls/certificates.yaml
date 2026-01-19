@@ -1,0 +1,391 @@
+# Open Forge Certificate Resources
+# Defines TLS certificates for all services
+#
+# Certificates:
+#   - API TLS: HTTPS for the API endpoint
+#   - UI TLS: HTTPS for the web UI
+#   - Dagster TLS: HTTPS for Dagster webserver
+#   - Internal service certificates: mTLS between services
+---
+# API TLS Certificate (Production)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "TLS certificate for API service"
+spec:
+  secretName: api-tls-secret
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days before expiry
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - api.open-forge.io
+    - api.open-forge.prod.svc.cluster.local
+    - open-forge-api.open-forge-prod.svc.cluster.local
+    - open-forge-api
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# UI TLS Certificate (Production)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ui-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "TLS certificate for UI service"
+spec:
+  secretName: ui-tls-secret
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days before expiry
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - open-forge.io
+    - www.open-forge.io
+    - app.open-forge.io
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Wildcard Certificate (Production)
+# Covers all subdomains
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Wildcard TLS certificate for all subdomains"
+spec:
+  secretName: wildcard-tls-secret
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days before expiry
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - "*.open-forge.io"
+    - open-forge.io
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Dagster TLS Certificate (Production)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dagster-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "TLS certificate for Dagster webserver"
+spec:
+  secretName: dagster-tls-secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - dagster.open-forge.io
+    - dagster-webserver.open-forge-prod.svc.cluster.local
+    - dagster-webserver
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Grafana TLS Certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "TLS certificate for Grafana"
+spec:
+  secretName: grafana-tls-secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  dnsNames:
+    - grafana.open-forge.io
+    - grafana.monitoring.svc.cluster.local
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Internal Service Certificates (mTLS)
+# PostgreSQL internal TLS
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres-internal-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Internal TLS certificate for PostgreSQL"
+spec:
+  secretName: postgres-internal-tls-secret
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+    - key encipherment
+  dnsNames:
+    - postgres
+    - postgres.open-forge-prod.svc.cluster.local
+    - postgres-headless.open-forge-prod.svc.cluster.local
+    - "*.postgres-headless.open-forge-prod.svc.cluster.local"
+  issuerRef:
+    name: internal-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+# Redis internal TLS
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: redis-internal-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Internal TLS certificate for Redis"
+spec:
+  secretName: redis-internal-tls-secret
+  duration: 8760h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - redis
+    - redis.open-forge-prod.svc.cluster.local
+  issuerRef:
+    name: internal-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+# MinIO internal TLS
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: minio-internal-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: minio
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Internal TLS certificate for MinIO"
+spec:
+  secretName: minio-internal-tls-secret
+  duration: 8760h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - minio
+    - minio.open-forge-prod.svc.cluster.local
+    - minio-headless.open-forge-prod.svc.cluster.local
+    - "*.minio-headless.open-forge-prod.svc.cluster.local"
+  issuerRef:
+    name: internal-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+# API Client Certificate (for mTLS)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-client-tls
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Client TLS certificate for API service mTLS"
+spec:
+  secretName: api-client-tls-secret
+  duration: 8760h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+    - digital signature
+  commonName: open-forge-api
+  issuerRef:
+    name: internal-ca
+    kind: Issuer
+    group: cert-manager.io
+---
+# Staging Certificates
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-tls
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "TLS certificate for API service (staging)"
+spec:
+  secretName: api-tls-secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  dnsNames:
+    - api.staging.open-forge.io
+    - open-forge-api.open-forge-staging.svc.cluster.local
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-staging-tls
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Wildcard TLS certificate for staging"
+spec:
+  secretName: wildcard-staging-tls-secret
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  dnsNames:
+    - "*.staging.open-forge.io"
+    - staging.open-forge.io
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# Development Self-Signed Certificates
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-tls
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Self-signed TLS certificate for API service (dev)"
+spec:
+  secretName: api-tls-secret
+  duration: 8760h # 1 year
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    - api.dev.open-forge.io
+    - localhost
+    - open-forge-api.open-forge-dev.svc.cluster.local
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: selfsigned
+    kind: Issuer
+    group: cert-manager.io

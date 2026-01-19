@@ -1,0 +1,330 @@
+# Open Forge API Network Policy
+# Controls network access for the FastAPI backend service
+#
+# Allowed ingress:
+#   - From ingress controller (nginx-ingress namespace)
+#   - From UI pods
+#   - From Dagster components
+#   - From monitoring (Prometheus scraping)
+#
+# Allowed egress:
+#   - To PostgreSQL database
+#   - To Redis cache
+#   - To MinIO object storage
+#   - To Anthropic API (external HTTPS)
+#   - To OpenAI API (external HTTPS)
+#   - To Langflow service
+#   - To Dagster service
+---
+# API Network Policy for Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Open Forge API service"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from UI pods in same namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: ui
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from Dagster components
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # MinIO
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # Langflow
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 7860
+    # Dagster
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+      ports:
+        - protocol: TCP
+          port: 3000
+    # External HTTPS - Anthropic API, OpenAI API, and other LLM providers
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # Exclude private IP ranges for security
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# API Network Policy for Staging
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Open Forge API service"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from UI pods in same namespace
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: ui
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from Dagster components
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-daemon
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # MinIO
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    # Langflow
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: langflow
+      ports:
+        - protocol: TCP
+          port: 7860
+    # Dagster
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              app.kubernetes.io/component: dagster-webserver
+      ports:
+        - protocol: TCP
+          port: 3000
+    # External HTTPS - Anthropic API, OpenAI API, and other LLM providers
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# API Network Policy for Development (more permissive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: open-forge-security
+  annotations:
+    description: "Network policy for Open Forge API service (dev)"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from any pod in the namespace for dev
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # All internal services
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+    # External HTTPS
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443

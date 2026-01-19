@@ -1,0 +1,279 @@
+# Open Forge Certificate Issuers Configuration
+# Uses cert-manager for automated TLS certificate management
+#
+# Prerequisites:
+#   1. Install cert-manager: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.yaml
+#   2. Configure DNS provider for DNS-01 challenges (for wildcard certs)
+#   3. Ensure ingress controller supports cert-manager annotations
+#
+# Issuers:
+#   - Let's Encrypt Staging: For testing (higher rate limits, untrusted certs)
+#   - Let's Encrypt Production: For production (trusted certs)
+#   - Self-signed: For internal services
+#   - CA Issuer: For internal PKI
+---
+# Let's Encrypt Staging ClusterIssuer
+# Use this for testing to avoid rate limits
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Let's Encrypt staging issuer for testing"
+spec:
+  acme:
+    # Staging server URL
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # Email for certificate notifications
+    email: admin@open-forge.io
+    # Secret to store the ACME account private key
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    # Enable HTTP-01 challenge
+    solvers:
+      # HTTP-01 challenge using ingress
+      - http01:
+          ingress:
+            class: nginx
+            podTemplate:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  seccompProfile:
+                    type: RuntimeDefault
+      # DNS-01 challenge for wildcard certificates (AWS Route53)
+      - dns01:
+          route53:
+            region: us-east-1
+            # Use IRSA for authentication
+            # hostedZoneID: Z1234567890ABC  # Optional: specify hosted zone
+        selector:
+          dnsZones:
+            - "open-forge.io"
+---
+# Let's Encrypt Production ClusterIssuer
+# Use this for production certificates
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Let's Encrypt production issuer for trusted certificates"
+spec:
+  acme:
+    # Production server URL
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # Email for certificate notifications
+    email: admin@open-forge.io
+    # Secret to store the ACME account private key
+    privateKeySecretRef:
+      name: letsencrypt-production-account-key
+    # Enable HTTP-01 and DNS-01 challenges
+    solvers:
+      # HTTP-01 challenge using ingress
+      - http01:
+          ingress:
+            class: nginx
+            podTemplate:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  seccompProfile:
+                    type: RuntimeDefault
+      # DNS-01 challenge for wildcard certificates (AWS Route53)
+      - dns01:
+          route53:
+            region: us-east-1
+        selector:
+          dnsZones:
+            - "open-forge.io"
+---
+# Google Cloud DNS solver (alternative to Route53)
+# Uncomment and configure if using GCP
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-production-gcp
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: admin@open-forge.io
+#     privateKeySecretRef:
+#       name: letsencrypt-production-gcp-account-key
+#     solvers:
+#       - dns01:
+#           cloudDNS:
+#             project: your-gcp-project-id
+#         selector:
+#           dnsZones:
+#             - "open-forge.io"
+---
+# Self-signed ClusterIssuer
+# Use for development and internal services
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Self-signed issuer for internal services"
+spec:
+  selfSigned: {}
+---
+# Root CA Certificate for internal PKI
+# This creates a self-signed CA certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: open-forge-ca
+  namespace: cert-manager
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Root CA certificate for Open Forge internal PKI"
+spec:
+  isCA: true
+  commonName: open-forge-ca
+  secretName: open-forge-ca-secret
+  duration: 87600h # 10 years
+  renewBefore: 8760h # 1 year
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+# CA ClusterIssuer using the root CA
+# Use this to issue certificates signed by the internal CA
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: open-forge-ca-issuer
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "CA issuer using Open Forge internal CA"
+spec:
+  ca:
+    secretName: open-forge-ca-secret
+---
+# Namespace-scoped issuers for each environment
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-production
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Production Let's Encrypt issuer"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@open-forge.io
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-staging
+  namespace: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Staging Let's Encrypt issuer"
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@open-forge.io
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+---
+# Self-signed issuer for development
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned
+  namespace: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Self-signed issuer for development"
+spec:
+  selfSigned: {}
+---
+# Internal CA issuer for internal services
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: internal-ca
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Internal CA issuer for service-to-service TLS"
+spec:
+  ca:
+    secretName: open-forge-internal-ca-secret
+---
+# Internal CA Certificate for the namespace
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-ca
+  namespace: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: certificates
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    description: "Internal CA for service-to-service TLS"
+spec:
+  isCA: true
+  commonName: open-forge-internal-ca
+  secretName: open-forge-internal-ca-secret
+  duration: 43800h # 5 years
+  renewBefore: 8760h # 1 year
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

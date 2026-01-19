@@ -12,7 +12,7 @@
 |----------|----------|------|--------|-----|
 | Security | 4 | 7 | 5 | 4 |
 | Bugs | 0 | 0 | 0 | 0 |
-| Performance | 0 | 0 | 0 | 0 |
+| Performance | 0 | 0 | 2 | 7 |
 | Code Quality | 0 | 0 | 0 | 0 |
 | Testing | 0 | 0 | 0 | 0 |
 | Documentation | 0 | 2 | 2 | 2 |
@@ -501,13 +501,122 @@ Current version floors in pyproject.toml files:
 ## Performance Review
 
 ### Database Queries
-_Pending review._
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Medium | N+1 query pattern in schema discovery - issues separate query for each table | `base_sql.py:155-177` | Batch column queries using UNION or multi-table metadata query; consider caching schema results |
+| 2 | Medium | No eager loading patterns for SQLAlchemy relationships | Multiple files | Add `selectinload`/`joinedload` options when fetching related objects to prevent lazy loading N+1 |
+| 3 | Low | Inefficient string replacement for Cypher parameters | `graph.py:39-43` | Use parameterized queries with proper binding instead of string replacement loop |
+| 4 | Low | No result-set pagination in schema discovery | `base_sql.py:152-153` | For databases with many tables, consider paginating table list queries |
+
+**Positive Observations:**
+- Settings object properly cached with `@lru_cache()` decorator (`config.py:71-73`)
+- Database connection pooling configured with sensible defaults (`base_sql.py:67-69`)
+- Pool pre-ping enabled to verify connections before use (`base_sql.py:69`)
+- Async database operations used consistently with SQLAlchemy AsyncEngine
+- Query results fetched in bulk with `fetchall()` rather than iterating cursors
+- Sample data queries use LIMIT parameter to prevent unbounded result sets (`base_sql.py:212`)
+
+**Details:**
+
+**Medium: N+1 Query in Schema Discovery (base_sql.py:155-177)**
+```python
+for table_name in tables:
+    columns_query = self._get_columns_query(table_name)
+    result = await conn.execute(text(columns_query))
+    # ... process columns
+```
+When discovering schema for all tables, this executes one query per table. For a database with 100 tables, this results in 100+ sequential queries. Consider using `information_schema` joins or batching table metadata queries.
+
+**Low: String Replacement for Graph Parameters (graph.py:39-43)**
+```python
+if params:
+    for key, value in params.items():
+        if isinstance(value, str):
+            cypher_query = cypher_query.replace(f"${key}", f"'{value}'")
+```
+This iterates through all parameters for each query, creating new string objects. While not a critical issue for typical query sizes, proper parameterization would be both more secure and more efficient.
 
 ### Memory Management
-_Pending review._
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Low | Lists accumulate in instance variables without bounds | `phase_manager.py:phase_history`, `graph_builder.py:_edges,_conditional_edges` | Add maximum history limits or periodic cleanup for long-running instances |
+| 2 | Low | Unbounded file lists in connectors | `parquet.py:66`, `csv.py:69` | Consider lazy iteration for directories with many files rather than loading all paths into memory |
+| 3 | Low | Global mutable singleton pattern | `langsmith.py:662-675` | Use `@lru_cache` pattern like `get_settings()` for cleaner lifecycle management |
+
+**Positive Observations:**
+- Pydantic models use `Field(default_factory=list)` correctly to avoid mutable default issues (`discovery/cluster.py:50-74`, `operations/cluster.py:54-71`)
+- Instance-level list initialization in `__init__` methods (not class-level), preventing shared state bugs (`parquet.py:66`, `csv.py:69`)
+- Database connections properly disposed via `engine.dispose()` (`base_sql.py:82-83`)
+- Async context managers used for automatic resource cleanup (`base_sql.py:72-73`, `base_sql.py:148`)
+- File connectors glob results are bound by filesystem rather than unbounded loops
+- Dagster IO managers handle large datasets through Polars with efficient memory usage
+- Sample data fetching uses explicit limits (`base_sql.py:184`)
+
+**Details:**
+
+**Low: Phase History Accumulation (phase_manager.py)**
+```python
+self.phase_history: List[PhaseTransition] = []
+```
+For long-running engagement workflows, phase history could grow unbounded. Consider implementing a maximum history size or archiving old transitions.
+
+**Low: File List Memory in Connectors (parquet.py:66, csv.py:69)**
+```python
+self._files: List[Path] = []
+# Later populated with:
+self._files.extend(self._path.glob("**/*.parquet"))
+```
+For directories with thousands of files, this loads all paths into memory at once. For very large datasets, consider lazy iteration with generators.
 
 ### Async Patterns
-_Pending review._
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Low | Mock `asyncio.sleep` in code generation route | `codegen.py:223` | Remove artificial delays; replace with actual async code generation when implemented |
+| 2 | Low | Blocking S3 SDK wrapped with run_in_executor | `s3.py:295-301` | Consider using aiobotocore for native async S3 operations instead of thread pool |
+
+**Positive Observations:**
+- **No blocking HTTP calls**: Codebase uses `httpx.AsyncClient` instead of synchronous `requests` library (`graphql.py:8`, `rest.py:9`)
+- **Proper async/await usage**: Consistent use of `await` with async database operations (`base_sql.py`, `graph.py`, `connection.py`)
+- **asyncio.sleep() used correctly**: Async sleep used for polling intervals (`pipeline_tool.py:226`, `approvals.py:499`, `escalation.py:575`)
+- **HTTPXClientInstrumentor**: OpenTelemetry instrumentation properly configured for async HTTP tracing (`tracing.py:15`)
+- **No time.sleep() in async code**: No instances of blocking `time.sleep()` found in async function bodies
+- **Proper event loop handling**: Event bus consumer uses `while True` with async Redis operations (`events.py:87-92`)
+- **Async context managers**: `asynccontextmanager` used appropriately for MCP connections and sessions (`mcp_adapter.py`)
+- **Task management**: `asyncio.create_task()` used for background expiration timers (`approvals.py:502`)
+- **Executor pattern for sync code**: Blocking boto3 S3 operations properly wrapped with `run_in_executor` (`s3.py:295-301`)
+
+**Details:**
+
+**Low: Mock Delays in Code Generation (codegen.py:223)**
+```python
+for idx, target in enumerate(targets):
+    # Simulate generation time
+    await asyncio.sleep(0.5)
+```
+This artificial delay exists for simulation purposes. When implementing actual code generation, these sleeps should be removed or replaced with progress callbacks.
+
+**Low: S3 Blocking Operations (s3.py:295-301)**
+```python
+body = await loop.run_in_executor(self._executor, get_streaming_body)
+while True:
+    chunk = await loop.run_in_executor(
+        self._executor,
+        lambda: body.read(chunk_size)
+    )
+```
+While the `run_in_executor` pattern correctly offloads blocking I/O to a thread pool, using `aiobotocore` would provide native async support and potentially better performance for high-concurrency scenarios.
 
 ---
 

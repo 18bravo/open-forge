@@ -328,7 +328,44 @@ _Pending review._
 _Pending review._
 
 ### Package: agents
-_Pending review._
+
+**Status:** Reviewed
+
+**Summary:** The agents package contains 6 agent clusters (Discovery, Data Architect, App Builder, Operations, Enablement, Orchestrator) with 25+ individual agents implementing both ReAct patterns and custom LangGraph workflows. The architecture demonstrates good separation of concerns and consistent patterns.
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Medium | User input directly interpolated into prompts without sanitization | `orchestrator.py:374-378`, `incident_agent.py:160-212` | Implement prompt input sanitization to prevent prompt injection; validate and escape user-provided context data before interpolation |
+| 2 | Medium | Inconsistent error handling - some exceptions silently swallowed | `react_agent.py:457,485`, `cluster.py:359` | Add explicit error handling with proper logging for all exception cases; avoid bare `except` clauses |
+| 3 | Medium | LLM response parsing failures default to empty structures | `support_agent.py:736-755`, `incident_agent.py:869-899` | Implement structured output parsing with fallback validation; log parse failures for debugging |
+| 4 | Low | File size variance across agents (100-1500 lines) indicates inconsistent complexity | `component_templates.py:1521 lines`, `react_agent.py:456-560 lines` | Consider refactoring larger files; extract reusable template logic into shared utilities |
+| 5 | Low | Magic numbers in prompt templates (limits, thresholds) | `react_agent.py:251,261` (limit=100), `support_agent.py:714` ([:4000]) | Extract configuration constants; make limits configurable per environment |
+| 6 | Low | Duplicate JSON extraction patterns across multiple agents | `support_agent.py:736-755`, `source_discovery_agent.py:262-270` | Create shared utility function for extracting JSON from LLM responses |
+| 7 | Low | State class proliferation without clear documentation | `orchestrator.py:147`, `EnablementState`, `AppBuilderState`, `OperationsState` | Document state class hierarchy and usage patterns; consider consolidation where appropriate |
+
+**Positive Observations:**
+- Consistent use of LangGraph StateGraph pattern across all agent clusters
+- Well-structured system prompts with clear role definitions, capabilities, and guidelines
+- Good use of `@register_agent` decorator for agent registry integration with metadata
+- Memory-aware agents properly implement checkpointing and persistent store patterns
+- Clear separation between ReAct agents (recommended) and legacy cluster agents
+- Comprehensive decision tracking with `add_decision()` and `mark_for_review()` patterns
+- Human-in-the-loop checkpoints properly integrated at phase boundaries
+- Quality gate validation consistently implemented before phase transitions
+- Factory functions provided for easier agent instantiation
+- Type hints used consistently throughout the codebase
+- Good use of Pydantic models for structured agent outputs
+- Jinja2 templates used for code generation (ui_generator_agent.py)
+- Proper async/await patterns for LLM invocations
+
+**Architecture Observations:**
+- **6 Agent Clusters:** Discovery, Data Architect, App Builder, Operations, Enablement, Orchestrator
+- **Agent Patterns:** Both ReAct (recommended for new implementations) and custom LangGraph workflows
+- **Memory Integration:** PostgresSaver for checkpoints, PostgresStore for long-term memory
+- **Event-Driven:** Event bus integration for cluster coordination
+- **Phase Management:** Structured engagement lifecycle (Discovery -> Design -> Build -> Deploy)
 
 ### Package: api
 

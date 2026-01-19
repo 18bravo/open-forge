@@ -10,7 +10,7 @@
 
 | Category | Critical | High | Medium | Low |
 |----------|----------|------|--------|-----|
-| Security | 2 | 2 | 2 | 2 |
+| Security | 4 | 5 | 4 | 3 |
 | Bugs | 0 | 0 | 0 | 0 |
 | Performance | 0 | 0 | 0 | 0 |
 | Code Quality | 0 | 0 | 0 | 0 |
@@ -24,6 +24,10 @@
 1. **Hardcoded Test Token** (`packages/api/src/api/dependencies.py:103`): A hardcoded `test-token` grants full admin privileges to any request using it. This must be removed before production.
 
 2. **No JWT Validation** (`packages/api/src/api/dependencies.py:90-116`): JWT tokens are not validated (no signature, expiration, or issuer checks). The authentication system is non-functional for production use.
+
+3. **Code Injection via eval()** (`packages/pipelines/src/pipelines/assets/transformation.py:260`): User-provided expressions are passed directly to Python's `eval()`, allowing arbitrary code execution on the server.
+
+4. **Code Injection via eval() in Canvas** (`packages/pipelines/src/canvas/compiler.py:607`): Canvas filter expressions use `eval()`, enabling arbitrary code execution through crafted filter expressions.
 
 ---
 
@@ -98,7 +102,89 @@ async def list_users(user: CurrentUser, ...):  # Missing require_role("admin")
 The hardcoded credentials found in `packages/connectors/` and `packages/pipelines/` are in example/docstring code and development configurations that fall back when environment variables are not set. While not ideal, these are clearly marked as development defaults and use environment variable overrides for production.
 
 ### Input Validation
-_Pending review._
+
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Critical | Unsafe `eval()` executes arbitrary code from user-provided expressions | `transformation.py:260` | Replace `eval()` with a safe expression parser (e.g., Polars native expressions or a sandboxed DSL) |
+| 2 | Critical | Unsafe `eval()` in filter expressions allows code injection | `compiler.py:607` | Replace `eval()` with validated expression parsing; use allowlist of safe operations |
+| 3 | High | SQL injection via f-string in table queries | `base_sql.py:206,212` | Use parameterized queries; validate table names against allowlist of known tables |
+| 4 | High | SQL injection in graph database queries | `graph.py:24,27,41-43` | Use parameterized queries; escape/validate user input before string interpolation |
+| 5 | High | Cypher injection via string replacement in queries | `graph.py:39-43` | Use proper Cypher parameter binding instead of string replacement |
+| 6 | Medium | File path validation missing for CSV/Parquet connectors | `csv.py:82`, `parquet.py:94` | Add path sanitization; prevent traversal patterns (`../`); restrict to allowed directories |
+| 7 | Medium | No max_length on some string fields in schemas | `agent.py:53-54`, `common.py:90-91` | Add max_length constraints to prevent DoS via oversized inputs |
+| 8 | Low | Dict[str, Any] fields accept arbitrary nested data | Multiple schema files | Consider schema validation for nested config structures |
+
+**Positive Observations:**
+- Pydantic models consistently used for all API input validation (`packages/api/src/api/schemas/`)
+- Good use of Field() constraints with min_length, max_length on name/description fields (`engagement.py:40-41`, `data_sources.py:44-45`)
+- Numeric fields properly bounded with ge/le constraints (`common.py:13-14`, `agent.py:63-73`)
+- Enum types used for status and type fields preventing invalid values (`engagement.py:10-28`, `agent.py:10-26`)
+- Pagination parameters have proper bounds (page_size max 100, `common.py:14`)
+- FastAPI Query parameters also use bounds validation (`data_sources.py:179-180`)
+
+**Details:**
+
+**Critical: eval() Code Injection (transformation.py:260)**
+```python
+# In derived_columns processing
+df = df.with_columns(eval(expression).alias(col_name))
+```
+User-provided expressions from `config.derived_columns` are passed directly to Python's `eval()`, allowing arbitrary code execution. An attacker could inject `__import__('os').system('rm -rf /')` as an expression.
+
+**Critical: eval() in Filter Transform (compiler.py:607)**
+```python
+def _apply_filter_transform(self, df, config, context):
+    expression = config.get("expression")
+    return df.filter(eval(expression))
+```
+Canvas filter expressions are evaluated with `eval()`, creating the same arbitrary code execution risk.
+
+**High: SQL Injection in base_sql.py**
+```python
+# Line 206 - Table name directly interpolated
+count_result = await conn.execute(
+    text(f"SELECT COUNT(*) FROM {source}")
+)
+# Line 212
+result = await conn.execute(
+    text(f"SELECT * FROM {source} LIMIT :limit"),
+    {"limit": limit}
+)
+```
+While `limit` is parameterized, `source` (table name) is directly interpolated. An attacker could pass `users; DROP TABLE users; --` as the source.
+
+**High: SQL Injection in graph.py**
+```python
+# Line 24
+result = await session.execute(text(
+    f"SELECT * FROM ag_catalog.ag_graph WHERE name = '{self.graph_name}'"
+))
+# Lines 39-43 - String replacement for Cypher parameters
+if params:
+    for key, value in params.items():
+        if isinstance(value, str):
+            cypher_query = cypher_query.replace(f"${key}", f"'{value}'")
+```
+Graph name and Cypher parameters use string interpolation instead of parameterized queries. The string replacement for Cypher parameters doesn't properly escape values.
+
+**Medium: Path Traversal Risk (csv.py, parquet.py)**
+File connectors accept `file_path` from configuration without path sanitization:
+```python
+self._path = Path(self.config.file_path)  # No traversal validation
+```
+While these are typically server-side configs, if user input ever reaches these paths, attackers could access arbitrary files using `../` patterns.
+
+**Medium: Unbounded String Fields**
+Several schema fields lack max_length constraints:
+- `agent.py:53-54`: `task_type`, `description` have no max_length
+- `common.py:90-91`: `user_id`, `username` have no max_length
+- Various `Optional[str]` fields across schemas
+
+While Pydantic provides type safety, unbounded strings could be used for DoS attacks with extremely large payloads.
 
 ### Secrets Management
 _Pending review._

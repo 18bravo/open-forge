@@ -53,6 +53,7 @@ export function MarketingNav() {
           className="md:hidden p-2"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           aria-label="Toggle menu"
+          aria-expanded={mobileMenuOpen}
         >
           {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
@@ -66,6 +67,7 @@ export function MarketingNav() {
               key={link.href}
               href={link.href}
               target={link.external ? '_blank' : undefined}
+              rel={link.external ? 'noopener noreferrer' : undefined}
               className="block py-3 text-zinc-400 hover:text-zinc-50"
               onClick={() => setMobileMenuOpen(false)}
             >

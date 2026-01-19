@@ -623,10 +623,104 @@ While the `run_in_executor` pattern correctly offloads blocking I/O to a thread 
 ## Testing Review
 
 ### Coverage Gaps
-_Pending review._
+**Status:** Reviewed
+
+**Test Inventory:**
+| Category | Count | Notes |
+|----------|-------|-------|
+| Python test files | 36 | Across packages/*/tests and tests/ directories |
+| Python test functions | 326 | Well-distributed across security, integration, e2e, and performance tests |
+| Python assertions | 1,227 | Strong assertion density (~3.76 assertions per test function) |
+| UI test files | 6 | In packages/ui/src/__tests__/ |
+| UI test cases | 218 | describe/it/test blocks with expectations |
+
+**Packages WITH Test Coverage:**
+- `packages/core/tests/` - 11 test functions covering database, messaging, and config
+- `packages/codegen/tests/` - 30 test functions covering generators (comprehensive)
+- `tests/security/` - 5 test files covering authentication, authorization, injection, XSS, OWASP Top 10
+- `tests/integration/` - Tests for agents, connectors, MCP, core services, ontology
+- `tests/e2e/` - Full workflow tests for API, engagement lifecycle, phases, scenarios
+- `tests/performance/` - API benchmarks and load tests
+- `packages/ui/src/__tests__/` - Component tests (button, admin, status-badge, engagement-card), hooks, utilities
+
+**Packages WITHOUT Test Directories (11 packages):**
+
+| Package | Risk | Recommendation |
+|---------|------|----------------|
+| `packages/agent-framework/` | High | Core abstraction layer - needs unit tests for graph builder, memory integration, MCP adapter |
+| `packages/agents/` | High | 25+ agents with complex LangGraph workflows - needs integration tests for each agent cluster |
+| `packages/api/` | High | All endpoints - integration tests exist in tests/ but package-level unit tests missing |
+| `packages/orchestration/` | High | State management and workflow coordination - critical for reliability |
+| `packages/pipelines/` | High | Contains eval() code injection risks - security tests essential |
+| `packages/connectors/` | Medium | Database and file connectors - integration tests exist in tests/ |
+| `packages/mcp-server/` | Medium | MCP protocol implementation - needs protocol conformance tests |
+| `packages/ontology/` | Medium | Schema compilation - integration tests exist in tests/ |
+| `packages/human-interaction/` | Medium | Approval workflows - needs workflow state tests |
+| `packages/langflow-components/` | Low | UI component definitions |
+| `packages/ui/` | Low | Has tests in src/__tests__/, but no dedicated tests/ folder at package root |
 
 ### Test Quality
-_Pending review._
+**Status:** Reviewed
+
+**Positive Observations:**
+
+1. **Proper Assertion Patterns:** Tests consistently use specific assertions with meaningful error messages:
+   ```python
+   assert response.status_code in [401, 403], (
+       f"{method} {endpoint} did not require authentication. "
+       f"Got status code: {response.status_code}"
+   )
+   ```
+
+2. **Comprehensive Security Testing:** Security tests cover OWASP Top 10 concerns:
+   - Authentication enforcement on protected endpoints
+   - Token validation (invalid, malformed, expired)
+   - Brute force protection (rate limiting detection)
+   - Session security (concurrent sessions, token in URL)
+   - SQL injection, command injection, NoSQL injection
+   - XSS and input validation
+
+3. **Well-Structured E2E Tests:** API e2e tests cover:
+   - REST API workflows (CRUD operations, pagination, filtering)
+   - GraphQL queries and mutations
+   - Real-time event publishing verification
+   - Error handling (validation errors, 404s, GraphQL errors)
+   - Authentication headers and request IDs
+
+4. **UI Test Quality:** Button component tests demonstrate proper patterns:
+   - Rendering variants and sizes
+   - User interactions with click handlers
+   - Disabled state behavior
+   - Accessibility (aria-label, focus management)
+   - asChild composition pattern
+
+5. **Fixtures and Test Infrastructure:**
+   - Proper use of pytest fixtures (`e2e_client`, `test_app`, `mock_db`, `mock_event_bus`)
+   - Mock LLM responses for agent testing
+   - Test markers for categorization (`@pytest.mark.security`, `@pytest.mark.asyncio`)
+
+**Areas for Improvement:**
+
+| # | Severity | Issue | Recommendation |
+|---|----------|-------|----------------|
+| 1 | High | No tests for `eval()` code injection paths | Add security tests for `transformation.py:260` and `compiler.py:607` with malicious payloads |
+| 2 | High | Agent clusters lack dedicated test coverage | Add integration tests for each of the 6 agent clusters (Discovery, Data Architect, App Builder, Operations, Enablement, Orchestrator) |
+| 3 | Medium | Missing error path tests | Add tests for exception handling in `react_agent.py:457,485`, `cluster.py:359` |
+| 4 | Medium | No contract tests for MCP protocol | Add MCP protocol conformance tests for mcp-server package |
+| 5 | Medium | Limited negative test cases | Add more tests for invalid inputs, boundary conditions, and error states |
+| 6 | Low | UI hook tests incomplete | Add tests for `use-engagement`, `use-approval`, `use-agent` hooks with mocked API responses |
+| 7 | Low | Performance test thresholds not enforced | Add assertions with specific latency/throughput thresholds in performance tests |
+
+**Test Organization:**
+- Tests are well-organized by category (security, integration, e2e, performance)
+- Integration tests are further organized by subsystem (agents, connectors, mcp, core, ontology)
+- UI tests follow standard React testing patterns with proper component isolation
+
+**Missing Test Types:**
+- Mutation testing to verify test effectiveness
+- Snapshot tests for UI components
+- Load tests with realistic production-like data volumes
+- Chaos engineering tests for infrastructure resilience
 
 ---
 

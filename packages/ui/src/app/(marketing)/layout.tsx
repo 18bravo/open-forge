@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { MarketingNav } from '@/components/marketing';
 
 export const metadata: Metadata = {
   title: 'Open Forge | The Open Source Ontology Platform',
@@ -26,6 +27,7 @@ interface MarketingLayoutProps {
 export default function MarketingLayout({ children }: MarketingLayoutProps) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
+      <MarketingNav />
       {children}
     </div>
   );

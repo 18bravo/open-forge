@@ -77,13 +77,18 @@ export function OntologyAnimation() {
       {nodes.map((node, i) => (
         <GraphNode key={i} position={node.position} color={node.color} />
       ))}
-      {edges.map(([startIdx, endIdx], i) => (
-        <GraphEdge
-          key={i}
-          start={nodes[startIdx].position}
-          end={nodes[endIdx].position}
-        />
-      ))}
+      {edges.map(([startIdx, endIdx], i) => {
+        const startNode = nodes[startIdx];
+        const endNode = nodes[endIdx];
+        if (!startNode || !endNode) return null;
+        return (
+          <GraphEdge
+            key={i}
+            start={startNode.position}
+            end={endNode.position}
+          />
+        );
+      })}
     </group>
   );
 }

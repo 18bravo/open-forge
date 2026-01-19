@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { Code2, Building2, Crown, Github, FileText, Rocket, Users, BarChart3, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -118,22 +117,38 @@ export function AudienceSegments() {
           <div className="flex flex-wrap gap-4">
             {activeAudience.ctas.map((cta) => {
               const Icon = cta.icon;
+              const isExternal = cta.href.startsWith('http');
+              const className = cn(
+                'flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors',
+                cta.primary
+                  ? 'bg-violet-600 text-white hover:bg-violet-500'
+                  : 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50'
+              );
+
+              if (isExternal) {
+                return (
+                  <a
+                    key={cta.label}
+                    href={cta.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={className}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {cta.label}
+                  </a>
+                );
+              }
+
               return (
-                <Link
+                <a
                   key={cta.label}
                   href={cta.href}
-                  target={cta.href.startsWith('http') ? '_blank' : undefined}
-                  rel={cta.href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  className={cn(
-                    'flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors',
-                    cta.primary
-                      ? 'bg-violet-600 text-white hover:bg-violet-500'
-                      : 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50'
-                  )}
+                  className={className}
                 >
                   <Icon className="h-4 w-4" />
                   {cta.label}
-                </Link>
+                </a>
               );
             })}
           </div>

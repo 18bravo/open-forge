@@ -3,14 +3,40 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Menu, X, Github } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
-const navLinks = [
+interface NavLink {
+  href: string;
+  label: string;
+  external?: boolean;
+}
+
+const navLinks: NavLink[] = [
   { href: '#features', label: 'Features' },
   { href: '#architecture', label: 'Architecture' },
   { href: 'https://github.com/overlordai/open-forge', label: 'GitHub', external: true },
   { href: '/docs', label: 'Docs' },
 ];
+
+function NavLinkItem({ link, className, onClick }: { link: NavLink; className?: string; onClick?: () => void }) {
+  if (link.external || link.href.startsWith('#')) {
+    return (
+      <a
+        href={link.href}
+        target={link.external ? '_blank' : undefined}
+        rel={link.external ? 'noopener noreferrer' : undefined}
+        className={className}
+        onClick={onClick}
+      >
+        {link.label}
+      </a>
+    );
+  }
+  return (
+    <Link href={link.href as '/'} className={className} onClick={onClick}>
+      {link.label}
+    </Link>
+  );
+}
 
 export function MarketingNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -27,17 +53,13 @@ export function MarketingNav() {
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
-            <Link
+            <NavLinkItem
               key={link.href}
-              href={link.href}
-              target={link.external ? '_blank' : undefined}
-              rel={link.external ? 'noopener noreferrer' : undefined}
+              link={link}
               className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors"
-            >
-              {link.label}
-            </Link>
+            />
           ))}
-          <Link
+          <a
             href="https://github.com/overlordai/open-forge"
             target="_blank"
             rel="noopener noreferrer"
@@ -45,7 +67,7 @@ export function MarketingNav() {
           >
             <Github className="h-4 w-4" />
             Star on GitHub
-          </Link>
+          </a>
         </div>
 
         {/* Mobile Menu Button */}
@@ -63,16 +85,12 @@ export function MarketingNav() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-zinc-800 bg-zinc-950 px-6 py-4">
           {navLinks.map((link) => (
-            <Link
+            <NavLinkItem
               key={link.href}
-              href={link.href}
-              target={link.external ? '_blank' : undefined}
-              rel={link.external ? 'noopener noreferrer' : undefined}
+              link={link}
               className="block py-3 text-zinc-400 hover:text-zinc-50"
               onClick={() => setMobileMenuOpen(false)}
-            >
-              {link.label}
-            </Link>
+            />
           ))}
         </div>
       )}

@@ -1,7 +1,21 @@
 import Link from 'next/link';
 import { Github, BookOpen, Mail, ExternalLink } from 'lucide-react';
 
-const ctaCards = [
+interface CtaCard {
+  title: string;
+  description: string;
+  cta: string;
+  href: string;
+  icon: React.ElementType;
+}
+
+interface FooterLink {
+  label: string;
+  href: string;
+  external?: boolean;
+}
+
+const ctaCards: CtaCard[] = [
   {
     title: 'Contribute',
     description: 'Join engineers building the open alternative',
@@ -25,7 +39,7 @@ const ctaCards = [
   },
 ];
 
-const footerLinks = {
+const footerLinks: Record<string, FooterLink[]> = {
   Product: [
     { label: 'Documentation', href: '/docs' },
     { label: 'Architecture', href: '/docs/architecture' },
@@ -69,12 +83,13 @@ export function FooterCTA() {
           <div className="grid gap-6 md:grid-cols-3 mb-16">
             {ctaCards.map((card) => {
               const Icon = card.icon;
+              const isExternal = card.href.startsWith('http');
               return (
-                <Link
+                <a
                   key={card.title}
                   href={card.href}
-                  target={card.href.startsWith('http') ? '_blank' : undefined}
-                  rel={card.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  target={isExternal ? '_blank' : undefined}
+                  rel={isExternal ? 'noopener noreferrer' : undefined}
                   className="group rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-violet-500/50 hover:bg-zinc-900"
                 >
                   <Icon className="mb-4 h-8 w-8 text-violet-500" />
@@ -84,7 +99,7 @@ export function FooterCTA() {
                     {card.cta}
                     <ExternalLink className="h-3 w-3" />
                   </span>
-                </Link>
+                </a>
               );
             })}
           </div>
@@ -110,14 +125,14 @@ export function FooterCTA() {
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link.label}>
-                      <Link
+                      <a
                         href={link.href}
                         target={link.external ? '_blank' : undefined}
                         rel={link.external ? 'noopener noreferrer' : undefined}
                         className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors"
                       >
                         {link.label}
-                      </Link>
+                      </a>
                     </li>
                   ))}
                 </ul>
@@ -128,20 +143,20 @@ export function FooterCTA() {
           <div className="mt-12 pt-8 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-zinc-500">
               Part of the{' '}
-              <Link href="https://overlordai.ai" className="text-zinc-300 hover:text-zinc-50">
+              <a href="https://overlordai.ai" target="_blank" rel="noopener noreferrer" className="text-zinc-300 hover:text-zinc-50">
                 OverlordAI
-              </Link>{' '}
+              </a>{' '}
               family:{' '}
               {siblingProducts.map((product, i) => (
                 <span key={product.name}>
-                  <Link
+                  <a
                     href={product.href}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-zinc-400 hover:text-zinc-50"
                   >
                     {product.name}
-                  </Link>
+                  </a>
                   {i < siblingProducts.length - 1 ? ' · ' : ''}
                 </span>
               ))}

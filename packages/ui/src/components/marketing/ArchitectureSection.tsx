@@ -1,5 +1,4 @@
 import { ExternalLink } from 'lucide-react';
-import Link from 'next/link';
 
 const layers = [
   { name: 'UI Portal', tech: 'React / Next.js', color: 'bg-violet-500' },
@@ -54,7 +53,7 @@ export function ArchitectureSection() {
                   {'tech' in layer && (
                     <span className="text-sm text-zinc-500">{layer.tech}</span>
                   )}
-                  {'items' in layer && (
+                  {'items' in layer && layer.items && (
                     <div className="flex flex-wrap gap-2">
                       {layer.items.map((item) => (
                         <span
@@ -86,13 +85,13 @@ export function ArchitectureSection() {
         </div>
 
         <div className="text-center">
-          <Link
+          <a
             href="/docs/architecture"
             className="inline-flex items-center gap-2 text-violet-400 hover:text-violet-300 transition-colors"
           >
             Explore the Full Architecture
             <ExternalLink className="h-4 w-4" />
-          </Link>
+          </a>
         </div>
       </div>
     </section>

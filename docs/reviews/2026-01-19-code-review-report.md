@@ -8,27 +8,46 @@
 
 ## Executive Summary
 
-| Category | Critical | High | Medium | Low |
-|----------|----------|------|--------|-----|
-| Security | 4 | 7 | 5 | 4 |
-| Bugs | 0 | 0 | 0 | 0 |
-| Performance | 0 | 0 | 2 | 7 |
-| Code Quality | 0 | 0 | 0 | 0 |
-| Testing | 0 | 0 | 0 | 0 |
-| Documentation | 0 | 2 | 2 | 2 |
-| Dependencies | 1 | 1 | 2 | 1 |
+| Category | Critical | High | Medium | Low | Total |
+|----------|----------|------|--------|-----|-------|
+| Security | 4 | 7 | 5 | 4 | 20 |
+| Code Quality | 0 | 4 | 12 | 18 | 34 |
+| Performance | 0 | 0 | 2 | 7 | 9 |
+| Testing | 0 | 2 | 5 | 0 | 7 |
+| Documentation | 0 | 2 | 2 | 2 | 6 |
+| Dependencies | 1 | 1 | 2 | 1 | 5 |
+| **Total** | **5** | **16** | **28** | **32** | **81** |
+
+**Risk Assessment:** The codebase has **5 critical** and **16 high** severity findings requiring immediate attention before production deployment. The majority are security-related, including authentication bypasses and code injection vulnerabilities.
 
 ---
 
 ## Critical Findings
 
-1. **Hardcoded Test Token** (`packages/api/src/api/dependencies.py:103`): A hardcoded `test-token` grants full admin privileges to any request using it. This must be removed before production.
+1. **Hardcoded test-token authentication bypass** (`packages/api/src/api/dependencies.py:103`)
+   - Any request with `Authorization: Bearer test-token` gains full admin access
+   - Grants `admin` role with `read`, `write`, `admin` permissions
+   - **Impact:** Complete authentication bypass; attacker gains full system control
 
-2. **No JWT Validation** (`packages/api/src/api/dependencies.py:90-116`): JWT tokens are not validated (no signature, expiration, or issuer checks). The authentication system is non-functional for production use.
+2. **No JWT validation implemented** (`packages/api/src/api/dependencies.py:90-116`)
+   - JWT tokens are not validated for signature, expiration, or issuer
+   - Only the hardcoded test-token is recognized
+   - **Impact:** Authentication is non-functional for production use
 
-3. **Code Injection via eval()** (`packages/pipelines/src/pipelines/assets/transformation.py:260`): User-provided expressions are passed directly to Python's `eval()`, allowing arbitrary code execution on the server.
+3. **eval() code injection in transformation.py** (`packages/pipelines/src/pipelines/assets/transformation.py:260`)
+   - User-provided expressions passed directly to Python's `eval()`
+   - Allows arbitrary code execution: `__import__('os').system('rm -rf /')`
+   - **Impact:** Remote code execution on the server
 
-4. **Code Injection via eval() in Canvas** (`packages/pipelines/src/canvas/compiler.py:607`): Canvas filter expressions use `eval()`, enabling arbitrary code execution through crafted filter expressions.
+4. **eval() code injection in compiler.py** (`packages/pipelines/src/canvas/compiler.py:607`)
+   - Canvas filter expressions evaluated with `eval()`
+   - Same arbitrary code execution risk as above
+   - **Impact:** Remote code execution through crafted filter expressions
+
+5. **13 critical vulnerabilities in Next.js 14.x** (`packages/ui/package.json`)
+   - SSRF, auth bypass, cache poisoning, DoS vulnerabilities
+   - Documented CVEs: GHSA-fr5h-rqp8-mj6g, GHSA-7gfc-8cq8-jh5f, and 11 others
+   - **Impact:** Multiple attack vectors against the UI layer
 
 ---
 
@@ -871,11 +890,122 @@ All 13 packages lack README.md files:
 
 ## Recommendations
 
-### Immediate Actions (Critical/High)
-_Pending review._
+### Immediate Actions (Critical/High) - Block Production Deployment
 
-### Short-term Improvements (Medium)
-_Pending review._
+**Authentication & Authorization**
+- [ ] Remove hardcoded `test-token` from `dependencies.py:103`; implement proper JWT validation with signature verification, expiration, and issuer checks
+- [ ] Add environment check to disable `X-User-ID` header bypass in production (`dependencies.py:82-88`)
+- [ ] Add `require_role("admin")` dependency to all admin endpoints (`admin.py`)
 
-### Future Enhancements (Low)
-_Pending review._
+**Code Injection**
+- [ ] Replace `eval()` in `transformation.py:260` with safe expression parser (simpleeval, asteval, or Polars native expressions)
+- [ ] Replace `eval()` in `compiler.py:607` with validated expression parsing using an allowlist of safe operations
+- [ ] Fix SQL injection in `base_sql.py:206,212` - validate table names against allowlist of known tables
+- [ ] Fix SQL injection in `graph.py:24,27,41-43` - use parameterized queries instead of string interpolation
+
+**Dependencies**
+- [ ] Upgrade Next.js from 14.x to 15.x to patch 13 critical vulnerabilities (breaking change - requires migration)
+- [ ] Run `npm audit fix --force` to upgrade glob and patch command injection vulnerability
+- [ ] Upgrade vitest to 4.x to patch esbuild development server vulnerability
+
+**Secrets Management**
+- [ ] Move hardcoded development passwords in `definitions.py:164,172` to required environment variables
+- [ ] Replace placeholder values in `.env.example` with `<your-password-here>` format
+- [ ] Refactor Kubernetes Secret manifests to reference ExternalSecret resources instead of hardcoded CHANGE_ME values
+
+**Code Quality**
+- [ ] Fix bare `except Exception:` clauses in `iceberg.py:38-39` and `events.py:83-84` - log exceptions or catch specific errors
+- [ ] Remove `= None` defaults from required dependencies in `engagements.py:268-270`, `approvals.py:292-294`
+- [ ] Add `response_model=` to all API endpoints for consistent contracts
+
+**Testing**
+- [ ] Add security tests for `eval()` code injection paths with malicious payloads
+- [ ] Add integration tests for each of the 6 agent clusters
+
+### Short-term Improvements (Medium) - Address Within 30 Days
+
+**Security**
+- [ ] Implement resource ownership validation for resource-specific operations
+- [ ] Add rate limiting to authentication endpoints to prevent brute force attacks
+- [ ] Add path sanitization to CSV/Parquet connectors to prevent directory traversal
+- [ ] Add `max_length` constraints to unbounded string fields in schemas
+
+**Code Quality**
+- [ ] Replace `datetime.utcnow()` with `datetime.now(timezone.utc)` across all files (Python 3.12 deprecation)
+- [ ] Move inline Pydantic models in router files to `api/schemas/` modules
+- [ ] Add missing return type annotations to public methods in core, agent-framework, and agents packages
+- [ ] Replace `print()` error logging with proper `logging` module (`events.py:107`)
+- [ ] Fix module-level settings instantiation to enable mocking in tests
+
+**Performance**
+- [ ] Fix N+1 query pattern in `base_sql.py:155-177` - batch column queries or use schema caching
+- [ ] Add `selectinload`/`joinedload` for SQLAlchemy relationships to prevent lazy loading N+1
+
+**Testing**
+- [ ] Add error path tests for exception handling in agent code
+- [ ] Add MCP protocol conformance tests for mcp-server package
+- [ ] Add tests for UI hooks (use-engagement, use-approval, use-agent) with mocked API responses
+
+**Documentation**
+- [ ] Document remaining 56 API endpoints (73% undocumented) in OpenAPI spec
+- [ ] Create README.md for each of the 13 packages
+- [ ] Complete or track TODO items in `reviews.py` and `approvals.py`
+
+**UI**
+- [ ] Fix TypeScript `any` types in `MetricsChart.tsx:99,104`
+- [ ] Fix useEffect missing dependency in `MetricsChart.tsx:64-84`
+- [ ] Remove console.log statements from production code
+
+### Future Enhancements (Low) - Address Within 90 Days
+
+**Security**
+- [ ] Review and restrict default permissions granted to users
+- [ ] Consider restricting health endpoint details in production
+- [ ] Use `<token>` placeholder format consistently in docstrings
+
+**Code Quality**
+- [ ] Refactor `langsmith.py` (705 lines) into separate modules
+- [ ] Consider using `@lru_cache` pattern for singleton management
+- [ ] Extract magic numbers and configuration constants
+- [ ] Create shared utility function for JSON extraction from LLM responses
+- [ ] Document state class hierarchy and consolidate where appropriate
+
+**Performance**
+- [ ] Add pagination for schema discovery queries in large databases
+- [ ] Consider adding maximum history limits for long-running engagement workflows
+- [ ] Consider using aiobotocore for native async S3 operations
+
+**Testing**
+- [ ] Add mutation testing to verify test effectiveness
+- [ ] Add snapshot tests for UI components
+- [ ] Add performance test assertions with specific latency/throughput thresholds
+
+**Infrastructure**
+- [ ] Consider pinning GitHub Actions to commit SHAs for supply chain security
+- [ ] Pin langflow Dockerfile to specific version instead of `latest`
+- [ ] Ensure dev stage of Dockerfile.api is never used in production
+
+---
+
+## Appendix: Review Methodology
+
+This review covered the complete Open Forge codebase across 9 gates:
+
+1. **Security Review** - Authentication, authorization, input validation, secrets management, dependencies
+2. **Code Quality Review** - Package-by-package analysis of core, agent-framework, agents, api, ui
+3. **Performance Review** - Database queries, memory management, async patterns
+4. **Testing Review** - Coverage gaps, test quality, test organization
+5. **Documentation Review** - API documentation, code comments, package READMEs
+6. **Infrastructure Review** - Kubernetes security, CI/CD security, Docker security
+
+**Tools Used:**
+- Static analysis via code inspection
+- Dependency auditing via `npm audit` and manual pyproject.toml review
+- Pattern matching for security anti-patterns (eval, SQL injection, hardcoded secrets)
+
+**Files Reviewed:** 200+ files across 13 packages
+
+---
+
+*Report generated: 2026-01-19*
+*Reviewer: Claude Code*

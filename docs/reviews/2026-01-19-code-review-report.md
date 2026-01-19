@@ -531,6 +531,82 @@ _Pending review._
 
 ---
 
+## Infrastructure Review
+
+### Kubernetes Security
+**Status:** Reviewed
+
+**Summary:** Kubernetes security configurations are well-implemented with defense-in-depth practices. All deployments use securityContext with proper constraints, network policies segment traffic, and resource quotas prevent resource exhaustion.
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Low | PostgreSQL init container runs as root | `postgres-statefulset.yaml:58` | Consider using init containers that don't require root, or document the necessity |
+| 2 | Low | readOnlyRootFilesystem disabled for databases | `postgres-statefulset.yaml`, `minio-statefulset.yaml`, `dagster/deployment.yaml` | Expected for databases requiring write access; ensure data directories are properly secured |
+| 3 | Info | Network policy allows egress to 0.0.0.0/0 for dev/staging | `namespaces.yaml:104-105,128-130` | Consider restricting egress to known external services in staging |
+
+**Positive Observations:**
+- **Security Contexts**: All pods specify `runAsNonRoot: true` at the pod level (`ui/deployment.yaml:38`, `postgres-statefulset.yaml:35`, `minio-statefulset.yaml:35`, `redis-deployment.yaml:34`)
+- **Container Security**: Individual containers set `allowPrivilegeEscalation: false` and drop all capabilities (`ui/deployment.yaml:69-73`, `redis-deployment.yaml:51-55`)
+- **Read-Only Filesystems**: UI and Redis containers use `readOnlyRootFilesystem: true` for immutable infrastructure
+- **Network Policies**: Proper network segmentation with namespace-scoped policies:
+  - Dev/Staging: Allow internal Open Forge traffic with external egress
+  - Production: Default deny-all with explicit allow rules, blocking private IP ranges (`namespaces.yaml:132-174`)
+- **Resource Quotas**: Namespace-level quotas defined for dev (8 CPU, 16Gi), staging (16 CPU, 32Gi), and production (64 CPU, 128Gi) (`namespaces.yaml:37-80`)
+- **Resource Limits**: All deployments specify both requests and limits for CPU and memory (`ui/deployment.yaml:75-80`, `postgres-statefulset.yaml:77-82`, etc.)
+- **Namespace Isolation**: Three separate namespaces (open-forge-dev, open-forge-staging, open-forge-prod) with proper labels
+
+### CI/CD Security
+**Status:** Reviewed
+
+**Summary:** GitHub Actions workflows follow security best practices with no hardcoded secrets and properly pinned action versions. All sensitive credentials are managed through GitHub Secrets.
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Low | Actions pinned to major versions (v3, v4, v5) instead of SHA | `build.yml` all `uses:` statements | Consider pinning to commit SHAs for supply chain security: `actions/checkout@abc123...` |
+| 2 | Info | Multiple workflow files reference same secrets | `deploy-prod.yml`, `deploy-dev.yml` | Consolidate secret references into reusable workflows to reduce duplication |
+
+**Positive Observations:**
+- **No Hardcoded Secrets**: All credentials use `${{ secrets.* }}` references:
+  - `secrets.KUBECONFIG_PROD` / `secrets.KUBECONFIG_DEV` for cluster access
+  - `secrets.SLACK_WEBHOOK_URL` for notifications
+  - `secrets.GITHUB_TOKEN` for repository operations
+- **Action Version Pinning**: All GitHub Actions pinned to specific major versions (e.g., `actions/checkout@v4`, `docker/build-push-action@v5`)
+- **Environment Separation**: Separate workflows for dev (`deploy-dev.yml`) and prod (`deploy-prod.yml`) with distinct secret references
+- **Secret Scoping**: Environment variables containing secrets are scoped to specific jobs/steps, not workflow-level
+- **No Secrets in Logs**: No evidence of `echo` or commands that could expose secrets in CI logs
+
+### Docker Security
+**Status:** Reviewed
+
+**Summary:** Dockerfiles follow industry best practices with multi-stage builds, non-root users, minimal base images, and proper security hygiene.
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | Low | langflow Dockerfile uses `latest` tag for base image | `Dockerfile.langflow:29` | Pin to specific version: `langflowai/langflow:1.x.x` for reproducibility |
+| 2 | Low | Development stage installs debugpy which could be a security risk | `Dockerfile.api:147` | Ensure dev stage is never used in production; consider separate Dockerfile.dev |
+| 3 | Info | `|| true` on RUN command hides failures | `Dockerfile.api:69` | Remove error suppression or add explicit error handling |
+
+**Positive Observations:**
+- **Multi-Stage Builds**: All Dockerfiles use multi-stage builds to minimize production image size (`Dockerfile.api`, `Dockerfile.dagster`, `Dockerfile.langflow`)
+- **Non-Root Users**: Production stages create and switch to non-root users (`openforge` user in `Dockerfile.api:96-97,122`, `dagster` user in `Dockerfile.dagster`)
+- **Slim Base Images**: Uses `python:3.11-slim` for minimal attack surface
+- **No Cache Flags**: `pip install --no-cache-dir` prevents credential leakage in layer cache
+- **Build Cleanup**: `apt-get clean` and `rm -rf /var/lib/apt/lists/*` remove package manager caches
+- **Build Args for Traceability**: VERSION and BUILD_SHA arguments enable version tracking in production (`Dockerfile.api:19-20,77-78`)
+- **OCI Labels**: Proper container metadata with `org.opencontainers.image.*` labels (`Dockerfile.api:81-86`)
+- **Health Checks**: Dockerfile includes HEALTHCHECK instruction (`Dockerfile.api:128-129`)
+- **Minimal Dependencies**: Production stages only install runtime dependencies (curl, libpq5), not build tools
+- **Environment Hardening**: `PYTHONUNBUFFERED=1` and `PYTHONDONTWRITEBYTECODE=1` for container best practices
+- **Separate Dev Stage**: Development-only dependencies isolated in separate stage
+
+---
+
 ## Recommendations
 
 ### Immediate Actions (Critical/High)

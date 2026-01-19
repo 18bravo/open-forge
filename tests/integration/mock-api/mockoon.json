@@ -1,0 +1,249 @@
+{
+  "uuid": "openforge-test-api",
+  "lastMigration": 32,
+  "name": "Open Forge Test API",
+  "endpointPrefix": "",
+  "latency": 0,
+  "port": 8080,
+  "hostname": "",
+  "folders": [],
+  "routes": [
+    {
+      "uuid": "health",
+      "type": "http",
+      "documentation": "Health check endpoint",
+      "method": "get",
+      "endpoint": "health",
+      "responses": [
+        {
+          "uuid": "health-response",
+          "body": "{\"status\": \"healthy\", \"service\": \"mock-api\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    },
+    {
+      "uuid": "users-list",
+      "type": "http",
+      "documentation": "List users endpoint",
+      "method": "get",
+      "endpoint": "api/v1/users",
+      "responses": [
+        {
+          "uuid": "users-list-response",
+          "body": "{\n  \"data\": [\n    {\"id\": \"1\", \"name\": \"John Doe\", \"email\": \"john@example.com\", \"active\": true},\n    {\"id\": \"2\", \"name\": \"Jane Smith\", \"email\": \"jane@example.com\", \"active\": true},\n    {\"id\": \"3\", \"name\": \"Bob Johnson\", \"email\": \"bob@example.com\", \"active\": false}\n  ],\n  \"total\": 3,\n  \"page\": 1,\n  \"limit\": 10\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    },
+    {
+      "uuid": "users-get",
+      "type": "http",
+      "documentation": "Get user by ID",
+      "method": "get",
+      "endpoint": "api/v1/users/:id",
+      "responses": [
+        {
+          "uuid": "users-get-response",
+          "body": "{\"id\": \"{{urlParam 'id'}}\", \"name\": \"Test User\", \"email\": \"test@example.com\", \"active\": true, \"created_at\": \"2024-01-15T10:30:00Z\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    },
+    {
+      "uuid": "orders-list",
+      "type": "http",
+      "documentation": "List orders endpoint",
+      "method": "get",
+      "endpoint": "api/v1/orders",
+      "responses": [
+        {
+          "uuid": "orders-list-response",
+          "body": "{\n  \"data\": [\n    {\"id\": \"ORD001\", \"customer_id\": \"1\", \"total\": 150.00, \"status\": \"completed\"},\n    {\"id\": \"ORD002\", \"customer_id\": \"1\", \"total\": 89.99, \"status\": \"pending\"},\n    {\"id\": \"ORD003\", \"customer_id\": \"2\", \"total\": 250.50, \"status\": \"processing\"}\n  ],\n  \"total\": 3,\n  \"page\": 1,\n  \"limit\": 10\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    },
+    {
+      "uuid": "products-list",
+      "type": "http",
+      "documentation": "List products endpoint",
+      "method": "get",
+      "endpoint": "api/v1/products",
+      "responses": [
+        {
+          "uuid": "products-list-response",
+          "body": "{\n  \"items\": [\n    {\"sku\": \"PROD001\", \"name\": \"Widget A\", \"price\": 29.99, \"in_stock\": true},\n    {\"sku\": \"PROD002\", \"name\": \"Widget B\", \"price\": 49.99, \"in_stock\": true},\n    {\"sku\": \"PROD003\", \"name\": \"Gadget X\", \"price\": 99.99, \"in_stock\": false}\n  ],\n  \"total_count\": 3\n}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    },
+    {
+      "uuid": "auth-protected",
+      "type": "http",
+      "documentation": "Protected endpoint requiring auth",
+      "method": "get",
+      "endpoint": "api/v1/protected",
+      "responses": [
+        {
+          "uuid": "auth-success",
+          "body": "{\"message\": \"Access granted\", \"user\": \"test-user\"}",
+          "latency": 0,
+          "statusCode": 200,
+          "label": "Authorized",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [
+            {
+              "target": "header",
+              "modifier": "Authorization",
+              "value": "Bearer test-token",
+              "invert": false,
+              "operator": "equals"
+            }
+          ],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id"
+        },
+        {
+          "uuid": "auth-failure",
+          "body": "{\"error\": \"unauthorized\", \"message\": \"Invalid or missing token\"}",
+          "latency": 0,
+          "statusCode": 401,
+          "label": "Unauthorized",
+          "headers": [
+            {"key": "Content-Type", "value": "application/json"}
+          ],
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": true,
+          "crudKey": "id"
+        }
+      ],
+      "responseMode": null
+    }
+  ],
+  "rootChildren": [
+    {"type": "route", "uuid": "health"},
+    {"type": "route", "uuid": "users-list"},
+    {"type": "route", "uuid": "users-get"},
+    {"type": "route", "uuid": "orders-list"},
+    {"type": "route", "uuid": "products-list"},
+    {"type": "route", "uuid": "auth-protected"}
+  ],
+  "proxyMode": false,
+  "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "tlsOptions": {
+    "enabled": false,
+    "type": "CERT",
+    "pfxPath": "",
+    "certPath": "",
+    "keyPath": "",
+    "caPath": "",
+    "passphrase": ""
+  },
+  "cors": true,
+  "headers": [
+    {"key": "Access-Control-Allow-Origin", "value": "*"},
+    {"key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,PATCH,DELETE,OPTIONS"},
+    {"key": "Access-Control-Allow-Headers", "value": "Content-Type,Authorization,X-Request-ID"}
+  ],
+  "proxyReqHeaders": [],
+  "proxyResHeaders": [],
+  "data": []
+}

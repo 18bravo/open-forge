@@ -1,0 +1,310 @@
+"""
+CRUD tests for {{ entity.name }}.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from datetime import datetime
+from uuid import uuid4
+
+import pytest
+{% if config.include_async_tests %}
+import pytest_asyncio
+from httpx import AsyncClient
+{% endif %}
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import {{ entity.name }}
+from tests.factories import {{ entity.name }}Factory
+
+if TYPE_CHECKING:
+    pass
+
+
+class Test{{ entity.name }}CRUD:
+    """Test CRUD operations for {{ entity.name }}."""
+
+    # =========================================================================
+    # CREATE Tests
+    # =========================================================================
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_create_{{ entity.name_snake }}_success(
+        self,
+        authenticated_client: AsyncClient,
+        {{ entity.name_snake }}_data: dict,
+    ):
+        """Test successful {{ entity.name }} creation."""
+        response = await authenticated_client.post(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            json={{ entity.name_snake }}_data,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert "{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}" in data
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key and prop.required %}
+        assert data["{{ prop.name_snake }}"] == {{ entity.name_snake }}_data["{{ prop.name_snake }}"]
+{% endif %}
+{% endfor %}
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_create_{{ entity.name_snake }}_missing_required_fields(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test {{ entity.name }} creation with missing required fields."""
+        response = await authenticated_client.post(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            json={},
+        )
+
+        assert response.status_code == 422  # Validation error
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_create_{{ entity.name_snake }}_unauthenticated(
+        self,
+        client: AsyncClient,
+        {{ entity.name_snake }}_data: dict,
+    ):
+        """Test {{ entity.name }} creation without authentication."""
+        response = await client.post(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            json={{ entity.name_snake }}_data,
+        )
+
+        assert response.status_code in (401, 403)
+
+    # =========================================================================
+    # READ Tests
+    # =========================================================================
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_list_{{ entity.name_plural_snake }}_success(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test listing {{ entity.name_plural }}."""
+        response = await authenticated_client.get("/api/v1/{{ entity.name_plural_snake }}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "page_size" in data
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_list_{{ entity.name_plural_snake }}_with_pagination(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test listing {{ entity.name_plural }} with pagination."""
+        response = await authenticated_client.get(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            params={"page": 1, "page_size": 10},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["page"] == 1
+        assert data["page_size"] == 10
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_get_{{ entity.name_snake }}_success(
+        self,
+        authenticated_client: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Test getting a single {{ entity.name }}."""
+        # Create a test entity
+        {{ entity.name_snake }} = {{ entity.name }}Factory.build()
+        db_session.add({{ entity.name_snake }})
+        await db_session.commit()
+        await db_session.refresh({{ entity.name_snake }})
+
+        response = await authenticated_client.get(
+            f"/api/v1/{{ entity.name_plural_snake }}/{{ '{' }}{{ entity.name_snake }}.{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}{{ '}' }}"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}"] == {{ entity.name_snake }}.{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_get_{{ entity.name_snake }}_not_found(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test getting a non-existent {{ entity.name }}."""
+        fake_id = str(uuid4())
+        response = await authenticated_client.get(
+            f"/api/v1/{{ entity.name_plural_snake }}/{fake_id}"
+        )
+
+        assert response.status_code == 404
+
+    # =========================================================================
+    # UPDATE Tests
+    # =========================================================================
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_update_{{ entity.name_snake }}_success(
+        self,
+        authenticated_client: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Test updating a {{ entity.name }}."""
+        # Create a test entity
+        {{ entity.name_snake }} = {{ entity.name }}Factory.build()
+        db_session.add({{ entity.name_snake }})
+        await db_session.commit()
+        await db_session.refresh({{ entity.name_snake }})
+
+        update_data = {{ entity.name }}Factory.build_update_payload(
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key and prop.required and loop.index <= 2 %}
+            {{ prop.name_snake }}={{ prop.sample_value }},
+{% endif %}
+{% endfor %}
+        )
+
+        response = await authenticated_client.put(
+            f"/api/v1/{{ entity.name_plural_snake }}/{{ '{' }}{{ entity.name_snake }}.{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}{{ '}' }}",
+            json=update_data,
+        )
+
+        assert response.status_code == 200
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_update_{{ entity.name_snake }}_not_found(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test updating a non-existent {{ entity.name }}."""
+        fake_id = str(uuid4())
+        update_data = {"name": "Updated"}
+
+        response = await authenticated_client.put(
+            f"/api/v1/{{ entity.name_plural_snake }}/{fake_id}",
+            json=update_data,
+        )
+
+        assert response.status_code == 404
+
+    # =========================================================================
+    # DELETE Tests
+    # =========================================================================
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_delete_{{ entity.name_snake }}_success(
+        self,
+        authenticated_client: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Test deleting a {{ entity.name }}."""
+        # Create a test entity
+        {{ entity.name_snake }} = {{ entity.name }}Factory.build()
+        db_session.add({{ entity.name_snake }})
+        await db_session.commit()
+        await db_session.refresh({{ entity.name_snake }})
+
+        response = await authenticated_client.delete(
+            f"/api/v1/{{ entity.name_plural_snake }}/{{ '{' }}{{ entity.name_snake }}.{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}{{ '}' }}"
+        )
+
+        assert response.status_code == 200
+
+        # Verify deletion
+        get_response = await authenticated_client.get(
+            f"/api/v1/{{ entity.name_plural_snake }}/{{ '{' }}{{ entity.name_snake }}.{{ entity.primary_key | snake_case if entity.primary_key else 'id' }}{{ '}' }}"
+        )
+        assert get_response.status_code == 404
+
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_delete_{{ entity.name_snake }}_not_found(
+        self,
+        authenticated_client: AsyncClient,
+    ):
+        """Test deleting a non-existent {{ entity.name }}."""
+        fake_id = str(uuid4())
+        response = await authenticated_client.delete(
+            f"/api/v1/{{ entity.name_plural_snake }}/{fake_id}"
+        )
+
+        assert response.status_code == 404
+
+
+class Test{{ entity.name }}Validation:
+    """Test validation for {{ entity.name }}."""
+
+{% for prop in entity.properties %}
+{% if prop.constraints %}
+{% for constraint in prop.constraints %}
+{% if constraint.type == 'min_length' %}
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_{{ prop.name_snake }}_min_length_validation(
+        self,
+        authenticated_client: AsyncClient,
+        {{ entity.name_snake }}_data: dict,
+    ):
+        """Test {{ prop.name }} minimum length validation."""
+        {{ entity.name_snake }}_data["{{ prop.name_snake }}"] = "a" * ({{ constraint.value }} - 1)
+        response = await authenticated_client.post(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            json={{ entity.name_snake }}_data,
+        )
+
+        assert response.status_code == 422
+
+{% endif %}
+{% if constraint.type == 'max_length' %}
+{% if config.include_async_tests %}
+    @pytest.mark.asyncio
+{% endif %}
+    async def test_{{ prop.name_snake }}_max_length_validation(
+        self,
+        authenticated_client: AsyncClient,
+        {{ entity.name_snake }}_data: dict,
+    ):
+        """Test {{ prop.name }} maximum length validation."""
+        {{ entity.name_snake }}_data["{{ prop.name_snake }}"] = "a" * ({{ constraint.value }} + 1)
+        response = await authenticated_client.post(
+            "/api/v1/{{ entity.name_plural_snake }}",
+            json={{ entity.name_snake }}_data,
+        )
+
+        assert response.status_code == 422
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}

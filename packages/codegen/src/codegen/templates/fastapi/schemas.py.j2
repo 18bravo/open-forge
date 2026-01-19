@@ -1,0 +1,177 @@
+"""
+Generated Pydantic schemas for: {{ schema_name }}
+Version: {{ schema_version }}
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Union
+from datetime import datetime, date, time
+from uuid import UUID
+from enum import Enum
+
+from pydantic import BaseModel, Field, field_validator
+
+
+# =============================================================================
+# Common Response Models
+# =============================================================================
+
+class PaginatedResponse(BaseModel):
+    """Generic paginated response wrapper."""
+    items: List[Any] = Field(default_factory=list, description="List of items")
+    total: int = Field(..., description="Total number of items")
+    page: int = Field(..., description="Current page number")
+    page_size: int = Field(..., description="Number of items per page")
+    pages: int = Field(..., description="Total number of pages")
+
+    @classmethod
+    def create(
+        cls,
+        items: List[Any],
+        total: int,
+        page: int,
+        page_size: int,
+    ) -> "PaginatedResponse":
+        """Create a paginated response."""
+        pages = (total + page_size - 1) // page_size if page_size > 0 else 0
+        return cls(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=pages,
+        )
+
+
+class SuccessResponse(BaseModel):
+    """Generic success response."""
+    success: bool = Field(default=True)
+    message: str = Field(default="Operation completed successfully")
+
+
+class ErrorResponse(BaseModel):
+    """Generic error response."""
+    success: bool = Field(default=False)
+    error: str = Field(..., description="Error message")
+    detail: Optional[str] = Field(default=None, description="Detailed error information")
+
+
+# =============================================================================
+# Enum Types
+# =============================================================================
+
+{% for entity in entities %}
+{% if entity.has_enums %}
+{% for prop in entity.properties %}
+{% if prop.is_enum and prop.enum_values %}
+class {{ entity.name }}{{ prop.name | pascal_case }}Enum(str, Enum):
+    """Enum for {{ entity.name }}.{{ prop.name }}"""
+{% for value in prop.enum_values %}
+    {{ value | snake_case | upper }} = "{{ value }}"
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+# =============================================================================
+# Entity Schemas
+# =============================================================================
+
+{% for entity in entities %}
+# -----------------------------------------------------------------------------
+# {{ entity.name }} Schemas
+# -----------------------------------------------------------------------------
+
+class {{ entity.name }}Base(BaseModel):
+    """Base schema for {{ entity.name }} with common fields."""
+{% if entity.description %}
+    """{{ entity.description }}"""
+{% endif %}
+{% for prop in entity.required_properties %}
+{% if prop.name != entity.primary_key %}
+    {{ prop.name_snake }}: {{ prop.python_type }} = Field(
+        ...,
+{% if prop.description %}
+        description="{{ prop.description }}",
+{% endif %}
+{% for constraint in prop.constraints %}
+{% if constraint.type == 'min_length' %}
+        min_length={{ constraint.value }},
+{% elif constraint.type == 'max_length' %}
+        max_length={{ constraint.value }},
+{% elif constraint.type == 'min_value' %}
+        ge={{ constraint.value }},
+{% elif constraint.type == 'max_value' %}
+        le={{ constraint.value }},
+{% endif %}
+{% endfor %}
+    )
+{% endif %}
+{% endfor %}
+{% for prop in entity.optional_properties %}
+    {{ prop.name_snake }}: {{ prop.python_type }} = Field(
+        default={% if prop.default is not none %}{{ prop.default | repr }}{% else %}None{% endif %},
+{% if prop.description %}
+        description="{{ prop.description }}",
+{% endif %}
+    )
+{% endfor %}
+
+    model_config = {
+        "populate_by_name": True,
+        "use_enum_values": True,
+    }
+
+
+class {{ entity.name }}Create({{ entity.name }}Base):
+    """Schema for creating a new {{ entity.name }}."""
+    pass
+
+
+class {{ entity.name }}Update(BaseModel):
+    """Schema for updating an existing {{ entity.name }}. All fields are optional."""
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+    {{ prop.name_snake }}: Optional[{{ prop.python_type.replace('Optional[', '').rstrip(']') if 'Optional' in prop.python_type else prop.python_type }}] = Field(
+        default=None,
+{% if prop.description %}
+        description="{{ prop.description }}",
+{% endif %}
+    )
+{% endif %}
+{% endfor %}
+
+    model_config = {
+        "populate_by_name": True,
+        "use_enum_values": True,
+    }
+
+
+class {{ entity.name }}Response({{ entity.name }}Base):
+    """Schema for {{ entity.name }} API responses."""
+    {{ entity.primary_key | snake_case if entity.primary_key else 'id' }}: str = Field(..., description="Unique identifier")
+{% if entity.has_timestamps %}
+    created_at: datetime = Field(..., description="Creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+{% endif %}
+
+
+class {{ entity.name }}Summary(BaseModel):
+    """Summary schema for {{ entity.name }} in list responses."""
+    {{ entity.primary_key | snake_case if entity.primary_key else 'id' }}: str = Field(..., description="Unique identifier")
+{% for prop in entity.required_properties[:3] %}
+{% if prop.name != entity.primary_key %}
+    {{ prop.name_snake }}: {{ prop.python_type }}
+{% endif %}
+{% endfor %}
+{% if entity.has_timestamps %}
+    created_at: datetime
+{% endif %}
+
+
+{% endfor %}

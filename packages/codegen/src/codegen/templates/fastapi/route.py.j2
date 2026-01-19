@@ -1,0 +1,272 @@
+"""
+{{ entity.name }} API endpoints.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from typing import Optional
+from uuid import uuid4
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, Query, status, Depends
+
+from api.dependencies import DbSession, CurrentUser
+{% if config.include_tracing %}
+from core.observability.tracing import traced, add_span_attribute
+{% endif %}
+from api.schemas.generated import (
+    PaginatedResponse,
+    SuccessResponse,
+    {{ entity.name }}Create,
+    {{ entity.name }}Update,
+    {{ entity.name }}Response,
+    {{ entity.name }}Summary,
+)
+
+
+router = APIRouter(prefix="/{{ entity.name_plural_snake }}", tags=["{{ entity.name_plural }}"])
+
+
+@router.post(
+    "",
+    response_model={{ entity.name }}Response,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create {{ entity.name | snake_case | replace('_', ' ') }}",
+    description="Creates a new {{ entity.name | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.create")
+{% endif %}
+async def create_{{ entity.name_snake }}(
+    data: {{ entity.name }}Create,
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+) -> {{ entity.name }}Response:
+    """
+    Create a new {{ entity.name }}.
+
+{% if entity.description %}
+    {{ entity.description }}
+{% endif %}
+    """
+    {{ entity.name_snake }}_id = str(uuid4())
+    now = datetime.utcnow()
+
+{% if config.include_tracing %}
+    add_span_attribute("{{ entity.name_snake }}.id", {{ entity.name_snake }}_id)
+{% endif %}
+
+    # TODO: Persist to database
+    response = {{ entity.name }}Response(
+        {{ entity.primary_key | snake_case if entity.primary_key else 'id' }}={{ entity.name_snake }}_id,
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+        {{ prop.name_snake }}=data.{{ prop.name_snake }},
+{% endif %}
+{% endfor %}
+{% if entity.has_timestamps %}
+        created_at=now,
+        updated_at=now,
+{% endif %}
+    )
+
+    return response
+
+
+@router.get(
+    "",
+    response_model=PaginatedResponse,
+    summary="List {{ entity.name_plural | snake_case | replace('_', ' ') }}",
+    description="Returns a paginated list of {{ entity.name_plural | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.list")
+{% endif %}
+async def list_{{ entity.name_plural_snake }}(
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+{% if config.include_pagination %}
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(
+        default={{ config.default_page_size }},
+        ge=1,
+        le={{ config.max_page_size }},
+        description="Items per page"
+    ),
+{% endif %}
+    search: Optional[str] = Query(default=None, description="Search query"),
+) -> PaginatedResponse:
+    """
+    List {{ entity.name_plural }} with pagination and filtering.
+    """
+{% if config.include_tracing %}
+{% if config.include_pagination %}
+    add_span_attribute("pagination.page", page)
+    add_span_attribute("pagination.page_size", page_size)
+{% endif %}
+{% endif %}
+
+    # TODO: Implement database query with filtering
+    items: list[{{ entity.name }}Summary] = []
+    total = 0
+
+    return PaginatedResponse.create(
+        items=items,
+        total=total,
+{% if config.include_pagination %}
+        page=page,
+        page_size=page_size,
+{% else %}
+        page=1,
+        page_size=100,
+{% endif %}
+    )
+
+
+@router.get(
+    "/{{ '{' }}{{ entity.name_snake }}_id{{ '}' }}",
+    response_model={{ entity.name }}Response,
+    summary="Get {{ entity.name | snake_case | replace('_', ' ') }}",
+    description="Returns details for a specific {{ entity.name | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.get")
+{% endif %}
+async def get_{{ entity.name_snake }}(
+    {{ entity.name_snake }}_id: str,
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+) -> {{ entity.name }}Response:
+    """
+    Get detailed information about a specific {{ entity.name }}.
+    """
+{% if config.include_tracing %}
+    add_span_attribute("{{ entity.name_snake }}.id", {{ entity.name_snake }}_id)
+{% endif %}
+
+    # TODO: Fetch from database
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"{{ entity.name }} with id {{ '{' }}{{ entity.name_snake }}_id{{ '}' }} not found"
+    )
+
+
+@router.put(
+    "/{{ '{' }}{{ entity.name_snake }}_id{{ '}' }}",
+    response_model={{ entity.name }}Response,
+    summary="Update {{ entity.name | snake_case | replace('_', ' ') }}",
+    description="Updates an existing {{ entity.name | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.update")
+{% endif %}
+async def update_{{ entity.name_snake }}(
+    {{ entity.name_snake }}_id: str,
+    data: {{ entity.name }}Update,
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+) -> {{ entity.name }}Response:
+    """
+    Update an existing {{ entity.name }}.
+
+    Only provided fields will be updated. Omit fields to keep their current values.
+    """
+{% if config.include_tracing %}
+    add_span_attribute("{{ entity.name_snake }}.id", {{ entity.name_snake }}_id)
+{% endif %}
+
+    # TODO: Fetch existing, update, and persist
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"{{ entity.name }} with id {{ '{' }}{{ entity.name_snake }}_id{{ '}' }} not found"
+    )
+
+
+@router.delete(
+    "/{{ '{' }}{{ entity.name_snake }}_id{{ '}' }}",
+    response_model=SuccessResponse,
+    summary="Delete {{ entity.name | snake_case | replace('_', ' ') }}",
+    description="Deletes a {{ entity.name | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.delete")
+{% endif %}
+async def delete_{{ entity.name_snake }}(
+    {{ entity.name_snake }}_id: str,
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+) -> SuccessResponse:
+    """
+    Delete a {{ entity.name }}.
+
+    This action cannot be undone.
+    """
+{% if config.include_tracing %}
+    add_span_attribute("{{ entity.name_snake }}.id", {{ entity.name_snake }}_id)
+{% endif %}
+
+    # TODO: Delete from database
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"{{ entity.name }} with id {{ '{' }}{{ entity.name_snake }}_id{{ '}' }} not found"
+    )
+
+{% if has_relationships %}
+# =============================================================================
+# Relationship Endpoints
+# =============================================================================
+{% for rel in entity.relationships %}
+
+@router.get(
+    "/{{ '{' }}{{ entity.name_snake }}_id{{ '}' }}/{{ rel.name_snake }}",
+{% if rel.is_many %}
+    response_model=PaginatedResponse,
+{% else %}
+    response_model={{ rel.target_type }}Response,
+{% endif %}
+    summary="Get {{ rel.name | snake_case | replace('_', ' ') }}",
+    description="Returns the {{ rel.name | snake_case | replace('_', ' ') }} for a {{ entity.name | snake_case | replace('_', ' ') }}"
+)
+{% if config.include_tracing %}
+@traced("{{ entity.name_snake }}.{{ rel.name_snake }}.get")
+{% endif %}
+async def get_{{ entity.name_snake }}_{{ rel.name_snake }}(
+    {{ entity.name_snake }}_id: str,
+    db: DbSession,
+{% if config.include_auth %}
+    user: CurrentUser,
+{% endif %}
+{% if rel.is_many and config.include_pagination %}
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default={{ config.default_page_size }}, ge=1, le={{ config.max_page_size }}),
+{% endif %}
+):
+    """
+    Get the {{ rel.name }} associated with a {{ entity.name }}.
+{% if rel.description %}
+
+    {{ rel.description }}
+{% endif %}
+    """
+{% if config.include_tracing %}
+    add_span_attribute("{{ entity.name_snake }}.id", {{ entity.name_snake }}_id)
+{% endif %}
+
+    # TODO: Fetch relationship from database
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"{{ entity.name }} with id {{ '{' }}{{ entity.name_snake }}_id{{ '}' }} not found"
+    )
+
+{% endfor %}
+{% endif %}

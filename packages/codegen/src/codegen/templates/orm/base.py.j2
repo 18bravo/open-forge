@@ -1,0 +1,203 @@
+"""
+SQLAlchemy base models and utilities.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+from typing import Any, AsyncGenerator, Optional
+from datetime import datetime
+from uuid import uuid4
+
+from sqlalchemy import MetaData, String, DateTime, Boolean, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+
+
+# Naming convention for constraints
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+class {{ config.base_class }}(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+
+    metadata = metadata
+
+    # Type annotation for the registry
+    registry = DeclarativeBase.registry
+
+    def __repr__(self) -> str:
+        """Generate a useful repr for debugging."""
+        class_name = self.__class__.__name__
+        attrs = []
+        for key in self.__mapper__.columns.keys():
+            if key in ("id", "created_at", "updated_at"):
+                value = getattr(self, key, None)
+                if value is not None:
+                    attrs.append(f"{key}={value!r}")
+        return f"<{class_name}({', '.join(attrs)})>"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert model to dictionary."""
+        result = {}
+        for column in self.__table__.columns:
+            value = getattr(self, column.name)
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            result[column.name] = value
+        return result
+
+
+class TimestampMixin:
+    """Mixin that adds created_at and updated_at timestamp columns."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+{% if config.include_soft_delete %}
+class SoftDeleteMixin:
+    """Mixin that adds soft delete support."""
+
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+    )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    def soft_delete(self) -> None:
+        """Mark this record as deleted."""
+        self.is_deleted = True
+        self.deleted_at = datetime.utcnow()
+
+    def restore(self) -> None:
+        """Restore a soft-deleted record."""
+        self.is_deleted = False
+        self.deleted_at = None
+
+
+{% endif %}
+class UUIDMixin:
+    """Mixin that adds a UUID primary key."""
+
+    id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+
+
+# =============================================================================
+# Database Session Management
+# =============================================================================
+
+{% if config.use_async %}
+class DatabaseSession:
+    """Async database session manager."""
+
+    def __init__(self, database_url: str, echo: bool = False):
+        """
+        Initialize the database session manager.
+
+        Args:
+            database_url: PostgreSQL connection URL (async version).
+            echo: Whether to echo SQL statements.
+        """
+        self.engine = create_async_engine(
+            database_url,
+            echo=echo,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+        )
+        self.async_session = async_sessionmaker(
+            self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Get an async database session."""
+        async with self.async_session() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
+
+    async def create_tables(self) -> None:
+        """Create all tables in the database."""
+        async with self.engine.begin() as conn:
+            await conn.run_sync({{ config.base_class }}.metadata.create_all)
+
+    async def drop_tables(self) -> None:
+        """Drop all tables in the database."""
+        async with self.engine.begin() as conn:
+            await conn.run_sync({{ config.base_class }}.metadata.drop_all)
+{% else %}
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+class DatabaseSession:
+    """Sync database session manager."""
+
+    def __init__(self, database_url: str, echo: bool = False):
+        """Initialize the database session manager."""
+        self.engine = create_engine(
+            database_url,
+            echo=echo,
+            pool_pre_ping=True,
+        )
+        self.SessionLocal = sessionmaker(
+            bind=self.engine,
+            autocommit=False,
+            autoflush=False,
+        )
+
+    def get_session(self) -> Session:
+        """Get a database session."""
+        session = self.SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def create_tables(self) -> None:
+        """Create all tables in the database."""
+        {{ config.base_class }}.metadata.create_all(bind=self.engine)
+
+    def drop_tables(self) -> None:
+        """Drop all tables in the database."""
+        {{ config.base_class }}.metadata.drop_all(bind=self.engine)
+{% endif %}

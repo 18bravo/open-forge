@@ -1,0 +1,171 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with Apache AGE (Graph) and pgvector (Embeddings)
+  postgres:
+    image: apache/age:latest
+    container_name: openforge-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-foundry}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-foundry_dev}
+      POSTGRES_DB: ${DB_NAME:-foundry}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-foundry} -d ${DB_NAME:-foundry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openforge-network
+
+  # Redis for messaging and caching
+  redis:
+    image: redis:7-alpine
+    container_name: openforge-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openforge-network
+
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: openforge-minio
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openforge-network
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: openforge-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set minio http://minio:9000 ${S3_ACCESS_KEY:-minio} ${S3_SECRET_KEY:-minio123};
+      mc mb --ignore-existing minio/foundry-lake;
+      mc mb --ignore-existing minio/foundry-artifacts;
+      exit 0;
+      "
+    networks:
+      - openforge-network
+
+  # Apache Iceberg REST Catalog
+  iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    container_name: openforge-iceberg
+    environment:
+      CATALOG_WAREHOUSE: s3://foundry-lake/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minio}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minio123}
+      AWS_REGION: us-east-1
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+    ports:
+      - "8181:8181"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - openforge-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: openforge-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"  # UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openforge-network
+
+  # Dagster for pipeline orchestration
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    container_name: openforge-dagster-webserver
+    environment:
+      DAGSTER_POSTGRES_HOST: postgres
+      DAGSTER_POSTGRES_USER: ${DB_USER:-foundry}
+      DAGSTER_POSTGRES_PASSWORD: ${DB_PASSWORD:-foundry_dev}
+      DAGSTER_POSTGRES_DB: ${DB_NAME:-foundry}
+      DAGSTER_HOME: /opt/dagster/dagster_home
+    ports:
+      - "3000:3000"
+    volumes:
+      - dagster_home:/opt/dagster/dagster_home
+      - ../../packages/pipelines:/opt/dagster/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
+    networks:
+      - openforge-network
+
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    container_name: openforge-dagster-daemon
+    environment:
+      DAGSTER_POSTGRES_HOST: postgres
+      DAGSTER_POSTGRES_USER: ${DB_USER:-foundry}
+      DAGSTER_POSTGRES_PASSWORD: ${DB_PASSWORD:-foundry_dev}
+      DAGSTER_POSTGRES_DB: ${DB_NAME:-foundry}
+      DAGSTER_HOME: /opt/dagster/dagster_home
+    volumes:
+      - dagster_home:/opt/dagster/dagster_home
+      - ../../packages/pipelines:/opt/dagster/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["dagster-daemon", "run"]
+    networks:
+      - openforge-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  dagster_home:
+
+networks:
+  openforge-network:
+    driver: bridge

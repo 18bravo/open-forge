@@ -1,0 +1,117 @@
+# contracts/events/event-catalog.yaml
+version: "1.0"
+events:
+  # Engagement lifecycle events
+  engagement.created:
+    description: "New engagement has been created"
+    schema:
+      type: object
+      required: [engagement_id, customer_name, created_by]
+      properties:
+        engagement_id: { type: string }
+        customer_name: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+  
+  engagement.phase_changed:
+    description: "Engagement moved to a new phase"
+    schema:
+      type: object
+      required: [engagement_id, previous_phase, new_phase]
+      properties:
+        engagement_id: { type: string }
+        previous_phase: { type: string }
+        new_phase: { type: string }
+        changed_at: { type: string, format: date-time }
+        changed_by: { type: string }
+  
+  # Agent events
+  agent.started:
+    description: "Agent has started execution"
+    schema:
+      type: object
+      required: [engagement_id, agent_name, run_id]
+      properties:
+        engagement_id: { type: string }
+        agent_name: { type: string }
+        run_id: { type: string }
+        started_at: { type: string, format: date-time }
+  
+  agent.completed:
+    description: "Agent has completed execution"
+    schema:
+      type: object
+      required: [engagement_id, agent_name, run_id, success]
+      properties:
+        engagement_id: { type: string }
+        agent_name: { type: string }
+        run_id: { type: string }
+        success: { type: boolean }
+        outputs: { type: object }
+        completed_at: { type: string, format: date-time }
+  
+  agent.requires_human:
+    description: "Agent requires human input"
+    schema:
+      type: object
+      required: [engagement_id, agent_name, reason, required_input]
+      properties:
+        engagement_id: { type: string }
+        agent_name: { type: string }
+        reason: { type: string }
+        required_input: { type: object }
+        deadline: { type: string, format: date-time }
+  
+  # Approval events
+  approval.requested:
+    description: "Approval has been requested"
+    schema:
+      type: object
+      required: [approval_id, engagement_id, type, title]
+      properties:
+        approval_id: { type: string }
+        engagement_id: { type: string }
+        type: { type: string }
+        title: { type: string }
+        description: { type: string }
+        requested_by: { type: string }
+        requested_at: { type: string, format: date-time }
+        deadline: { type: string, format: date-time }
+  
+  approval.decided:
+    description: "Approval decision has been made"
+    schema:
+      type: object
+      required: [approval_id, decision, decided_by]
+      properties:
+        approval_id: { type: string }
+        decision: { type: string, enum: [approved, rejected, modified] }
+        decided_by: { type: string }
+        decided_at: { type: string, format: date-time }
+        comments: { type: string }
+  
+  # Data events
+  ontology.compiled:
+    description: "Ontology has been compiled"
+    schema:
+      type: object
+      required: [engagement_id, version, checksum]
+      properties:
+        engagement_id: { type: string }
+        version: { type: string }
+        checksum: { type: string }
+        object_types: { type: array, items: { type: string } }
+        compiled_at: { type: string, format: date-time }
+  
+  pipeline.executed:
+    description: "Pipeline has been executed"
+    schema:
+      type: object
+      required: [engagement_id, pipeline_id, status]
+      properties:
+        engagement_id: { type: string }
+        pipeline_id: { type: string }
+        status: { type: string, enum: [success, failed, warning] }
+        records_processed: { type: integer }
+        duration_seconds: { type: number }
+        executed_at: { type: string, format: date-time }

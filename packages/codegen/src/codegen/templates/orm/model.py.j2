@@ -1,0 +1,302 @@
+"""
+SQLAlchemy model for {{ entity.name }}.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, List, Optional
+from datetime import datetime, date, time
+from uuid import uuid4
+
+from sqlalchemy import (
+    String,
+    Integer,
+    BigInteger,
+    Float,
+    Boolean,
+    DateTime,
+    Date,
+    Time,
+    Text,
+    ForeignKey,
+    Table,
+    Column,
+    Index,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+
+from db.models.base import {{ config.base_class }}, TimestampMixin, UUIDMixin
+{% if config.include_soft_delete %}
+from db.models.base import SoftDeleteMixin
+{% endif %}
+
+if TYPE_CHECKING:
+{% for rel_entity in related_entities %}
+    from db.models.{{ rel_entity | snake_case }} import {{ rel_entity }}
+{% endfor %}
+
+
+{% for rel in entity.relationships %}
+{% if rel.cardinality == 'many_to_many' %}
+# Junction table for {{ entity.name }} <-> {{ rel.target_type }} relationship
+{{ rel.junction_table }}_table = Table(
+    "{{ rel.junction_table }}",
+    {{ config.base_class }}.metadata,
+    Column(
+        "{{ entity.name_snake }}_id",
+        String(36),
+        ForeignKey("{{ entity.metadata.table_name }}.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "{{ rel.target_type_snake }}_id",
+        String(36),
+        ForeignKey("{{ config.table_prefix }}{{ rel.target_type_snake }}.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+{% if config.include_timestamps %}
+    Column("created_at", DateTime(timezone=True), default=datetime.utcnow),
+{% endif %}
+)
+
+{% endif %}
+{% endfor %}
+
+class {{ entity.name }}(
+    UUIDMixin,
+{% if entity.has_timestamps %}
+    TimestampMixin,
+{% endif %}
+{% if config.include_soft_delete %}
+    SoftDeleteMixin,
+{% endif %}
+    {{ config.base_class }},
+):
+    """
+    SQLAlchemy model for {{ entity.name }}.
+{% if entity.description %}
+
+    {{ entity.description }}
+{% endif %}
+    """
+
+    __tablename__ = "{{ entity.metadata.table_name }}"
+{% if entity.metadata.schema_name and entity.metadata.schema_name != 'public' %}
+    __table_args__ = {"schema": "{{ entity.metadata.schema_name }}"}
+{% endif %}
+
+    # =========================================================================
+    # Columns
+    # =========================================================================
+
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+{% if prop.is_enum %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}str{% if not prop.required %}]{% endif %}] = mapped_column(
+        String(50),
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.default is not none %}
+        default="{{ prop.default }}",
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'string' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}str{% if not prop.required %}]{% endif %}] = mapped_column(
+{% set has_max_length = namespace(value=false) %}
+{% for constraint in prop.constraints %}
+{% if constraint.type == 'max_length' %}
+{% set has_max_length.value = true %}
+        String({{ constraint.value }}),
+{% endif %}
+{% endfor %}
+{% if not has_max_length.value %}
+        Text,
+{% endif %}
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.default is not none %}
+        default="{{ prop.default }}",
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'integer' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}int{% if not prop.required %}]{% endif %}] = mapped_column(
+        BigInteger,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.default is not none %}
+        default={{ prop.default }},
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'float' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}float{% if not prop.required %}]{% endif %}] = mapped_column(
+        Float,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.default is not none %}
+        default={{ prop.default }},
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'boolean' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}bool{% if not prop.required %}]{% endif %}] = mapped_column(
+        Boolean,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.default is not none %}
+        default={{ prop.default | lower }},
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'datetime' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}datetime{% if not prop.required %}]{% endif %}] = mapped_column(
+        DateTime(timezone=True),
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'date' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}date{% if not prop.required %}]{% endif %}] = mapped_column(
+        Date,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type == 'uuid' %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}str{% if not prop.required %}]{% endif %}] = mapped_column(
+        String(36),
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% elif prop.type in ('json', 'array') %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}dict[str, Any]{% if not prop.required %}]{% endif %}] = mapped_column(
+        JSONB,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+{% if prop.type == 'array' %}
+        default=list,
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% else %}
+    {{ prop.name_snake }}: Mapped[{% if not prop.required %}Optional[{% endif %}str{% if not prop.required %}]{% endif %}] = mapped_column(
+        Text,
+{% if not prop.required %}
+        nullable=True,
+{% else %}
+        nullable=False,
+{% endif %}
+        comment="{{ prop.description | default('') }}",
+    )
+{% endif %}
+
+{% endif %}
+{% endfor %}
+{% if entity.relationships %}
+    # =========================================================================
+    # Foreign Keys
+    # =========================================================================
+
+{% for rel in entity.relationships %}
+{% if rel.cardinality in ('many_to_one', 'one_to_one') %}
+    {{ rel.name_snake }}_id: Mapped[{% if not rel.is_required %}Optional[{% endif %}str{% if not rel.is_required %}]{% endif %}] = mapped_column(
+        String(36),
+        ForeignKey("{{ config.table_prefix }}{{ rel.target_type_snake }}.id", ondelete="SET NULL"),
+{% if rel.is_required %}
+        nullable=False,
+{% else %}
+        nullable=True,
+{% endif %}
+    )
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if entity.relationships or entity.metadata.incoming_relationships %}
+    # =========================================================================
+    # Relationships
+    # =========================================================================
+
+{% for rel in entity.relationships %}
+{% if rel.cardinality == 'many_to_one' %}
+    {{ rel.name_snake }}: Mapped[Optional["{{ rel.target_type }}"]] = relationship(
+        "{{ rel.target_type }}",
+        foreign_keys=[{{ rel.name_snake }}_id],
+{% if rel.inverse_name %}
+        back_populates="{{ rel.inverse_name | snake_case }}",
+{% endif %}
+        lazy="selectin",
+    )
+{% elif rel.cardinality == 'one_to_one' %}
+    {{ rel.name_snake }}: Mapped[Optional["{{ rel.target_type }}"]] = relationship(
+        "{{ rel.target_type }}",
+        foreign_keys=[{{ rel.name_snake }}_id],
+{% if rel.inverse_name %}
+        back_populates="{{ rel.inverse_name | snake_case }}",
+{% endif %}
+        uselist=False,
+        lazy="selectin",
+    )
+{% elif rel.cardinality == 'one_to_many' %}
+    {{ rel.name_snake }}: Mapped[List["{{ rel.target_type }}"]] = relationship(
+        "{{ rel.target_type }}",
+{% if rel.inverse_name %}
+        back_populates="{{ rel.inverse_name | snake_case }}",
+{% endif %}
+        lazy="selectin",
+    )
+{% elif rel.cardinality == 'many_to_many' %}
+    {{ rel.name_snake }}: Mapped[List["{{ rel.target_type }}"]] = relationship(
+        "{{ rel.target_type }}",
+        secondary={{ rel.junction_table }}_table,
+{% if rel.inverse_name %}
+        back_populates="{{ rel.inverse_name | snake_case }}",
+{% endif %}
+        lazy="selectin",
+    )
+{% endif %}
+
+{% endfor %}
+{% for rel in entity.metadata.incoming_relationships %}
+{% if rel.cardinality == 'one_to_many' and rel.inverse_name %}
+    {{ rel.inverse_name | snake_case }}: Mapped[List["{{ rel.source_type }}"]] = relationship(
+        "{{ rel.source_type }}",
+        back_populates="{{ rel.name_snake }}",
+        lazy="selectin",
+    )
+{% endif %}
+{% endfor %}
+{% endif %}

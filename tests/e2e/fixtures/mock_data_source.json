@@ -1,0 +1,253 @@
+{
+  "sources": [
+    {
+      "id": "salesforce-crm",
+      "name": "Salesforce CRM",
+      "type": "saas_application",
+      "technology": "Salesforce REST API",
+      "description": "Primary CRM system containing customer, opportunity, and activity data",
+      "connection": {
+        "type": "oauth2",
+        "auth_url": "https://login.salesforce.com/services/oauth2/authorize",
+        "token_url": "https://login.salesforce.com/services/oauth2/token",
+        "instance_url": "https://company.my.salesforce.com",
+        "api_version": "v58.0",
+        "scopes": ["api", "refresh_token", "offline_access"]
+      },
+      "objects": [
+        {
+          "name": "Account",
+          "description": "Customer accounts",
+          "estimated_rows": 50000,
+          "fields": [
+            {"name": "Id", "type": "id", "primary_key": true},
+            {"name": "Name", "type": "string", "required": true},
+            {"name": "Industry", "type": "picklist"},
+            {"name": "AnnualRevenue", "type": "currency"},
+            {"name": "NumberOfEmployees", "type": "integer"},
+            {"name": "Type", "type": "picklist"},
+            {"name": "CreatedDate", "type": "datetime"},
+            {"name": "LastModifiedDate", "type": "datetime"}
+          ]
+        },
+        {
+          "name": "Contact",
+          "description": "Contact persons",
+          "estimated_rows": 200000,
+          "fields": [
+            {"name": "Id", "type": "id", "primary_key": true},
+            {"name": "AccountId", "type": "reference", "references": "Account"},
+            {"name": "FirstName", "type": "string"},
+            {"name": "LastName", "type": "string", "required": true},
+            {"name": "Email", "type": "email"},
+            {"name": "Phone", "type": "phone"},
+            {"name": "Title", "type": "string"}
+          ]
+        },
+        {
+          "name": "Opportunity",
+          "description": "Sales opportunities",
+          "estimated_rows": 75000,
+          "fields": [
+            {"name": "Id", "type": "id", "primary_key": true},
+            {"name": "AccountId", "type": "reference", "references": "Account"},
+            {"name": "Name", "type": "string", "required": true},
+            {"name": "Amount", "type": "currency"},
+            {"name": "StageName", "type": "picklist", "required": true},
+            {"name": "Probability", "type": "percent"},
+            {"name": "CloseDate", "type": "date", "required": true},
+            {"name": "OwnerId", "type": "reference", "references": "User"},
+            {"name": "LeadSource", "type": "picklist"}
+          ]
+        },
+        {
+          "name": "Task",
+          "description": "Tasks and activities",
+          "estimated_rows": 500000,
+          "fields": [
+            {"name": "Id", "type": "id", "primary_key": true},
+            {"name": "WhatId", "type": "reference", "polymorphic": true},
+            {"name": "WhoId", "type": "reference", "references": "Contact"},
+            {"name": "Subject", "type": "string"},
+            {"name": "Status", "type": "picklist"},
+            {"name": "Priority", "type": "picklist"},
+            {"name": "ActivityDate", "type": "date"}
+          ]
+        }
+      ],
+      "sync_config": {
+        "mode": "incremental",
+        "batch_size": 2000,
+        "rate_limit": {
+          "requests_per_second": 10,
+          "daily_limit": 100000
+        },
+        "watermark_field": "LastModifiedDate"
+      },
+      "quality_assessment": {
+        "overall_score": 0.85,
+        "dimensions": {
+          "completeness": 0.92,
+          "accuracy": 0.88,
+          "consistency": 0.85,
+          "timeliness": 0.78,
+          "validity": 0.90,
+          "uniqueness": 0.95
+        },
+        "issues": [
+          {
+            "dimension": "timeliness",
+            "description": "Some records have stale data (>30 days)",
+            "affected_percentage": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "customer-success-db",
+      "name": "Customer Success Database",
+      "type": "database",
+      "technology": "PostgreSQL 14",
+      "description": "Customer health and support data",
+      "connection": {
+        "type": "connection_string",
+        "host": "${CS_DB_HOST}",
+        "port": 5432,
+        "database": "customer_success",
+        "schema": "public",
+        "ssl_mode": "require",
+        "pool_size": 10
+      },
+      "tables": [
+        {
+          "name": "health_scores",
+          "description": "Customer health score history",
+          "estimated_rows": 1000000,
+          "columns": [
+            {"name": "id", "type": "uuid", "primary_key": true},
+            {"name": "customer_id", "type": "varchar(255)", "indexed": true},
+            {"name": "score", "type": "decimal(5,2)"},
+            {"name": "score_date", "type": "date"},
+            {"name": "components", "type": "jsonb"},
+            {"name": "created_at", "type": "timestamp"}
+          ],
+          "indexes": [
+            {"name": "idx_health_customer_date", "columns": ["customer_id", "score_date"]}
+          ]
+        },
+        {
+          "name": "nps_responses",
+          "description": "NPS survey responses",
+          "estimated_rows": 250000,
+          "columns": [
+            {"name": "id", "type": "uuid", "primary_key": true},
+            {"name": "customer_id", "type": "varchar(255)"},
+            {"name": "score", "type": "integer"},
+            {"name": "feedback", "type": "text"},
+            {"name": "survey_date", "type": "date"},
+            {"name": "created_at", "type": "timestamp"}
+          ]
+        },
+        {
+          "name": "support_tickets",
+          "description": "Customer support tickets",
+          "estimated_rows": 500000,
+          "columns": [
+            {"name": "id", "type": "uuid", "primary_key": true},
+            {"name": "customer_id", "type": "varchar(255)"},
+            {"name": "subject", "type": "varchar(500)"},
+            {"name": "status", "type": "varchar(50)"},
+            {"name": "priority", "type": "varchar(20)"},
+            {"name": "category", "type": "varchar(100)"},
+            {"name": "created_at", "type": "timestamp"},
+            {"name": "resolved_at", "type": "timestamp"},
+            {"name": "resolution_time_hours", "type": "decimal(10,2)"}
+          ]
+        }
+      ],
+      "sync_config": {
+        "mode": "cdc",
+        "publication": "openforge_sync",
+        "slot_name": "openforge_slot"
+      },
+      "quality_assessment": {
+        "overall_score": 0.90,
+        "dimensions": {
+          "completeness": 0.95,
+          "accuracy": 0.92,
+          "consistency": 0.88,
+          "timeliness": 0.90,
+          "validity": 0.88,
+          "uniqueness": 0.97
+        }
+      }
+    },
+    {
+      "id": "event-stream",
+      "name": "Customer Event Stream",
+      "type": "streaming",
+      "technology": "Apache Kafka",
+      "description": "Real-time customer interaction events",
+      "connection": {
+        "type": "kafka",
+        "bootstrap_servers": "${KAFKA_BROKERS}",
+        "security_protocol": "SASL_SSL",
+        "sasl_mechanism": "PLAIN"
+      },
+      "topics": [
+        {
+          "name": "customer.events.pageview",
+          "description": "Page view events",
+          "messages_per_day": 10000000,
+          "schema": {
+            "type": "avro",
+            "schema_registry": "${SCHEMA_REGISTRY_URL}"
+          },
+          "partitions": 12,
+          "retention_days": 7
+        },
+        {
+          "name": "customer.events.action",
+          "description": "User action events",
+          "messages_per_day": 2000000,
+          "partitions": 6,
+          "retention_days": 30
+        }
+      ],
+      "sync_config": {
+        "mode": "streaming",
+        "consumer_group": "openforge-consumer",
+        "auto_offset_reset": "earliest",
+        "checkpoint_interval_seconds": 60
+      }
+    }
+  ],
+  "integration_complexity": {
+    "salesforce-crm": {
+      "complexity_score": 2,
+      "effort_estimate": "3-5 days",
+      "risks": [
+        {"risk": "API rate limits", "mitigation": "Implement exponential backoff"},
+        {"risk": "OAuth token expiry", "mitigation": "Automated token refresh"}
+      ],
+      "dependencies": ["OAuth credentials", "API user permissions"]
+    },
+    "customer-success-db": {
+      "complexity_score": 1,
+      "effort_estimate": "1-2 days",
+      "risks": [
+        {"risk": "Large table scans", "mitigation": "Partition-based extraction"}
+      ],
+      "dependencies": ["Database credentials", "Network access"]
+    },
+    "event-stream": {
+      "complexity_score": 3,
+      "effort_estimate": "5-7 days",
+      "risks": [
+        {"risk": "Message ordering", "mitigation": "Partition key design"},
+        {"risk": "Schema evolution", "mitigation": "Schema registry with compatibility checks"}
+      ],
+      "dependencies": ["Kafka credentials", "Schema registry access"]
+    }
+  }
+}

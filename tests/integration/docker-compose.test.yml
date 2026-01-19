@@ -1,0 +1,139 @@
+version: '3.8'
+
+# Integration Test Infrastructure for Open Forge
+#
+# Start with: docker-compose -f docker-compose.test.yml up -d
+# Stop with: docker-compose -f docker-compose.test.yml down -v
+#
+# Environment variables can be used to customize ports:
+#   TEST_DB_PORT, TEST_REDIS_PORT, TEST_S3_PORT, TEST_ICEBERG_PORT
+
+services:
+  # PostgreSQL with Apache AGE for graph database testing
+  test-postgres:
+    image: apache/age:latest
+    container_name: openforge-test-postgres
+    environment:
+      POSTGRES_USER: foundry
+      POSTGRES_PASSWORD: foundry_dev
+      POSTGRES_DB: openforge_test
+    ports:
+      - "${TEST_DB_PORT:-5433}:5432"
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foundry -d openforge_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - openforge-test-network
+
+  # Redis for messaging and caching tests
+  test-redis:
+    image: redis:7-alpine
+    container_name: openforge-test-redis
+    ports:
+      - "${TEST_REDIS_PORT:-6380}:6379"
+    volumes:
+      - test_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - openforge-test-network
+
+  # MinIO for S3-compatible storage tests
+  test-minio:
+    image: minio/minio:latest
+    container_name: openforge-test-minio
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "${TEST_S3_PORT:-9002}:9000"
+      - "${TEST_S3_CONSOLE_PORT:-9003}:9001"
+    volumes:
+      - test_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - openforge-test-network
+
+  # MinIO bucket initialization for tests
+  test-minio-init:
+    image: minio/mc:latest
+    container_name: openforge-test-minio-init
+    depends_on:
+      test-minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set testminio http://test-minio:9000 minio minio123;
+      mc mb --ignore-existing testminio/foundry-lake;
+      mc mb --ignore-existing testminio/openforge-integration-test;
+      mc mb --ignore-existing testminio/test-artifacts;
+      exit 0;
+      "
+    networks:
+      - openforge-test-network
+
+  # Apache Iceberg REST Catalog for table tests
+  test-iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    container_name: openforge-test-iceberg
+    environment:
+      CATALOG_WAREHOUSE: s3://foundry-lake/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      AWS_REGION: us-east-1
+      CATALOG_S3_ENDPOINT: http://test-minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+    ports:
+      - "${TEST_ICEBERG_PORT:-8182}:8181"
+    depends_on:
+      test-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/v1/config"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - openforge-test-network
+
+  # Mock REST API for connector tests
+  test-mock-api:
+    image: mockoon/cli:latest
+    container_name: openforge-test-mock-api
+    volumes:
+      - ./mock-api/mockoon.json:/data/mockoon.json:ro
+    command: ["--data", "/data/mockoon.json", "--port", "8080"]
+    ports:
+      - "${TEST_MOCK_API_PORT:-8085}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - openforge-test-network
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
+  test_minio_data:
+
+networks:
+  openforge-test-network:
+    driver: bridge

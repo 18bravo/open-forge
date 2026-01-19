@@ -1,0 +1,136 @@
+"""
+Factory classes for {{ schema_name }} test data.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, Optional, TypeVar, Generic
+from datetime import datetime, date, time
+from uuid import uuid4
+
+import factory
+from factory import LazyAttribute, LazyFunction, Sequence, SubFactory
+from faker import Faker
+
+{% for entity in entities %}
+from db.models import {{ entity.name }}
+{% endfor %}
+
+fake = Faker()
+
+T = TypeVar("T")
+
+
+# =============================================================================
+# Base Factory
+# =============================================================================
+
+class BaseFactory(factory.Factory, Generic[T]):
+    """Base factory with common utilities."""
+
+    class Meta:
+        abstract = True
+
+    @classmethod
+    def create_batch_dict(cls, size: int, **kwargs) -> list[dict]:
+        """Create a batch of dictionaries (without saving to DB)."""
+        return [cls.build(**kwargs).__dict__ for _ in range(size)]
+
+
+# =============================================================================
+# Entity Factories
+# =============================================================================
+
+{% for entity in entities %}
+class {{ entity.name }}Factory(BaseFactory[{{ entity.name }}]):
+    """Factory for {{ entity.name }} entities."""
+
+    class Meta:
+        model = {{ entity.name }}
+
+    # Primary key
+    {{ entity.primary_key | snake_case if entity.primary_key else 'id' }} = LazyFunction(lambda: str(uuid4()))
+
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+{% if prop.required %}
+    # {{ prop.name }} - required {{ prop.type }}
+    {{ prop.name_snake }} = {{ prop.factory_value }}
+{% else %}
+    # {{ prop.name }} - optional {{ prop.type }}
+    {{ prop.name_snake }} = None
+{% endif %}
+
+{% endif %}
+{% endfor %}
+{% if entity.has_timestamps %}
+    # Timestamps
+    created_at = LazyFunction(datetime.utcnow)
+    updated_at = LazyFunction(datetime.utcnow)
+{% endif %}
+
+    @classmethod
+    def build_create_payload(cls, **overrides) -> dict:
+        """Build a payload suitable for API create requests."""
+        instance = cls.build(**overrides)
+        payload = {}
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key and prop.required %}
+        payload["{{ prop.name_snake }}"] = instance.{{ prop.name_snake }}
+{% endif %}
+{% endfor %}
+        payload.update(overrides)
+        return payload
+
+    @classmethod
+    def build_update_payload(cls, **fields) -> dict:
+        """Build a payload suitable for API update requests."""
+        return {k: v for k, v in fields.items() if v is not None}
+
+
+{% endfor %}
+# =============================================================================
+# Relationship Factories
+# =============================================================================
+
+{% for entity in entities %}
+{% if entity.relationships %}
+class {{ entity.name }}WithRelationshipsFactory({{ entity.name }}Factory):
+    """Factory for {{ entity.name }} with relationships populated."""
+
+{% for rel in entity.relationships %}
+{% if not rel.is_many %}
+    {{ rel.name_snake }} = SubFactory("tests.factories.{{ rel.target_type }}Factory")
+{% endif %}
+{% endfor %}
+
+
+{% endif %}
+{% endfor %}
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def create_test_data_set(
+    *,
+{% for entity in entities %}
+    {{ entity.name_plural_snake }}_count: int = 0,
+{% endfor %}
+) -> Dict[str, list]:
+    """
+    Create a complete test data set with related entities.
+
+    Returns a dictionary with lists of created entities.
+    """
+    data = {}
+
+{% for entity in entities %}
+    if {{ entity.name_plural_snake }}_count > 0:
+        data["{{ entity.name_plural_snake }}"] = {{ entity.name }}Factory.build_batch(
+            {{ entity.name_plural_snake }}_count
+        )
+
+{% endfor %}
+    return data

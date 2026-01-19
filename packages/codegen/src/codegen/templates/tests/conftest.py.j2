@@ -1,0 +1,165 @@
+"""
+Pytest fixtures for {{ schema_name }} tests.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from __future__ import annotations
+
+import asyncio
+from typing import AsyncGenerator, Generator
+from datetime import datetime, date, time
+from uuid import uuid4
+
+import pytest
+{% if config.include_async_tests %}
+import pytest_asyncio
+{% endif %}
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from db.models import {{ config.base_class if config else 'Base' }}, DatabaseSession, metadata
+from api.main import app
+from api.dependencies import get_db
+
+# Test database URL (in-memory SQLite for speed)
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+# =============================================================================
+# Event Loop Fixture
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+    """Create an event loop for the test session."""
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# =============================================================================
+# Database Fixtures
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def test_engine():
+    """Create a test database engine."""
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
+    return engine
+
+
+@pytest_asyncio.fixture(scope="session")
+async def setup_database(test_engine):
+    """Set up the test database schema."""
+    async with test_engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(metadata.drop_all)
+
+
+@pytest_asyncio.fixture
+async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Provide a database session for each test.
+
+{% if config.database_strategy == 'transaction' %}
+    Uses transaction rollback for test isolation.
+{% elif config.database_strategy == 'truncate' %}
+    Truncates tables after each test.
+{% endif %}
+    """
+    async_session = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async with async_session() as session:
+{% if config.database_strategy == 'transaction' %}
+        # Start a transaction that will be rolled back
+        async with session.begin():
+            yield session
+            # Transaction is rolled back automatically
+{% else %}
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+{% endif %}
+
+
+# =============================================================================
+# API Client Fixtures
+# =============================================================================
+
+@pytest_asyncio.fixture
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """Provide an async HTTP client for API testing."""
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
+        yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def authenticated_client(client: AsyncClient) -> AsyncClient:
+    """Provide an authenticated HTTP client."""
+    # TODO: Add authentication token/headers
+    client.headers["Authorization"] = "Bearer test_token"
+    return client
+
+
+# =============================================================================
+# Factory Fixtures
+# =============================================================================
+
+{% for entity in entities %}
+@pytest.fixture
+def {{ entity.name_snake }}_data() -> dict:
+    """Sample data for creating a {{ entity.name }}."""
+    return {
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key and prop.required %}
+        "{{ prop.name_snake }}": {{ prop.sample_value }},
+{% endif %}
+{% endfor %}
+    }
+
+
+{% endfor %}
+# =============================================================================
+# Utility Fixtures
+# =============================================================================
+
+@pytest.fixture
+def random_uuid() -> str:
+    """Generate a random UUID string."""
+    return str(uuid4())
+
+
+@pytest.fixture
+def current_time() -> datetime:
+    """Get current UTC time."""
+    return datetime.utcnow()

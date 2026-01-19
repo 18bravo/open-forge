@@ -1,0 +1,36 @@
+"""
+SQLAlchemy models index.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from db.models.base import (
+    {{ config.base_class }},
+    TimestampMixin,
+    UUIDMixin,
+{% if config.include_soft_delete %}
+    SoftDeleteMixin,
+{% endif %}
+    DatabaseSession,
+    metadata,
+)
+
+{% for entity in entities %}
+from db.models.{{ entity.name_snake }} import {{ entity.name }}
+{% endfor %}
+
+__all__ = [
+    # Base classes
+    "{{ config.base_class }}",
+    "TimestampMixin",
+    "UUIDMixin",
+{% if config.include_soft_delete %}
+    "SoftDeleteMixin",
+{% endif %}
+    "DatabaseSession",
+    "metadata",
+    # Models
+{% for entity in entities %}
+    "{{ entity.name }}",
+{% endfor %}
+]

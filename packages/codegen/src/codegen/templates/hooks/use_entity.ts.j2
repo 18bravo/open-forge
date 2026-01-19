@@ -1,0 +1,198 @@
+{% if config.use_client_directive %}'use client';
+
+{% endif %}/**
+ * React Query hooks for {{ entity.name }}.
+ * Generated at: {{ generated_at }}
+ *
+ * This file is auto-generated. Do not edit directly.
+ */
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  get{{ entity.name_plural }},
+  get{{ entity.name }},
+  create{{ entity.name }},
+  update{{ entity.name }},
+  delete{{ entity.name }},
+{% for rel in entity.relationships %}
+  get{{ entity.name }}{{ rel.name | pascal_case }},
+{% endfor %}
+} from '{{ config.api_import_path }}';
+import type {
+  {{ entity.name }},
+  {{ entity.name }}Create,
+  {{ entity.name }}Update,
+  {{ entity.name }}Summary,
+  {{ entity.name }}Filters,
+  PaginatedResponse,
+{% for rel in entity.relationships %}
+{% if rel.is_many %}
+  {{ rel.target_type }}Summary,
+{% else %}
+  {{ rel.target_type }},
+{% endif %}
+{% endfor %}
+} from '{{ config.api_import_path }}/types';
+
+// =============================================================================
+// Query Keys
+// =============================================================================
+
+export const {{ entity.name | camel_case }}Keys = {
+  all: ['{{ entity.name_plural | camel_case }}'] as const,
+  lists: () => [...{{ entity.name | camel_case }}Keys.all, 'list'] as const,
+  list: (filters: {{ entity.name }}Filters) =>
+    [...{{ entity.name | camel_case }}Keys.lists(), filters] as const,
+  details: () => [...{{ entity.name | camel_case }}Keys.all, 'detail'] as const,
+  detail: (id: string) => [...{{ entity.name | camel_case }}Keys.details(), id] as const,
+{% for rel in entity.relationships %}
+  {{ rel.name | camel_case }}: (id: string) =>
+    [...{{ entity.name | camel_case }}Keys.detail(id), '{{ rel.name | camel_case }}'] as const,
+{% endfor %}
+};
+
+// =============================================================================
+// Query Hooks
+// =============================================================================
+
+/**
+ * Hook for fetching a paginated list of {{ entity.name_plural }}.
+ */
+export function use{{ entity.name_plural }}(filters?: {{ entity.name }}Filters) {
+  return useQuery<PaginatedResponse<{{ entity.name }}Summary>>({
+    queryKey: {{ entity.name | camel_case }}Keys.list(filters ?? {}),
+    queryFn: () => get{{ entity.name_plural }}(filters),
+{% if config.stale_time %}
+    staleTime: {{ config.stale_time }},
+{% endif %}
+{% if config.cache_time %}
+    gcTime: {{ config.cache_time }},
+{% endif %}
+{% if config.retry_count %}
+    retry: {{ config.retry_count }},
+{% endif %}
+  });
+}
+
+/**
+ * Hook for fetching a single {{ entity.name }} by ID.
+ */
+export function use{{ entity.name }}(id: string | undefined) {
+  return useQuery<{{ entity.name }}>({
+    queryKey: {{ entity.name | camel_case }}Keys.detail(id ?? ''),
+    queryFn: () => get{{ entity.name }}(id!),
+    enabled: !!id,
+{% if config.stale_time %}
+    staleTime: {{ config.stale_time }},
+{% endif %}
+  });
+}
+
+{% for rel in entity.relationships %}
+/**
+ * Hook for fetching {{ rel.name }} for a {{ entity.name }}.
+ */
+export function use{{ entity.name }}{{ rel.name | pascal_case }}(
+  {{ entity.name | camel_case }}Id: string | undefined{% if rel.is_many %},
+  params?: { page?: number; page_size?: number }{% endif %}
+
+) {
+  return useQuery<{% if rel.is_many %}PaginatedResponse<{{ rel.target_type }}Summary>{% else %}{{ rel.target_type }}{% endif %}>({
+    queryKey: {{ entity.name | camel_case }}Keys.{{ rel.name | camel_case }}({{ entity.name | camel_case }}Id ?? ''),
+    queryFn: () => get{{ entity.name }}{{ rel.name | pascal_case }}({{ entity.name | camel_case }}Id!{% if rel.is_many %}, params{% endif %}),
+    enabled: !!{{ entity.name | camel_case }}Id,
+  });
+}
+
+{% endfor %}
+// =============================================================================
+// Mutation Hooks
+// =============================================================================
+
+/**
+ * Hook for creating a new {{ entity.name }}.
+ */
+export function useCreate{{ entity.name }}() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {{ entity.name }}Create) => create{{ entity.name }}(data),
+    onSuccess: () => {
+      // Invalidate and refetch list queries
+      queryClient.invalidateQueries({ queryKey: {{ entity.name | camel_case }}Keys.lists() });
+    },
+{% if config.include_error_handling %}
+    onError: (error: Error) => {
+      console.error('Failed to create {{ entity.name }}:', error.message);
+    },
+{% endif %}
+  });
+}
+
+/**
+ * Hook for updating an existing {{ entity.name }}.
+ */
+export function useUpdate{{ entity.name }}() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: {{ entity.name }}Update }) =>
+      update{{ entity.name }}(id, data),
+{% if config.include_optimistic_updates %}
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: {{ entity.name | camel_case }}Keys.detail(id) });
+
+      // Snapshot previous value
+      const previous = queryClient.getQueryData<{{ entity.name }}>(
+        {{ entity.name | camel_case }}Keys.detail(id)
+      );
+
+      // Optimistically update
+      if (previous) {
+        queryClient.setQueryData<{{ entity.name }}>({{ entity.name | camel_case }}Keys.detail(id), {
+          ...previous,
+          ...data,
+        });
+      }
+
+      return { previous };
+    },
+    onError: (error, { id }, context) => {
+      // Rollback on error
+      if (context?.previous) {
+        queryClient.setQueryData({{ entity.name | camel_case }}Keys.detail(id), context.previous);
+      }
+      console.error('Failed to update {{ entity.name }}:', error.message);
+    },
+{% endif %}
+    onSuccess: (data, { id }) => {
+      // Update cache with server response
+      queryClient.setQueryData({{ entity.name | camel_case }}Keys.detail(id), data);
+      // Invalidate lists
+      queryClient.invalidateQueries({ queryKey: {{ entity.name | camel_case }}Keys.lists() });
+    },
+  });
+}
+
+/**
+ * Hook for deleting a {{ entity.name }}.
+ */
+export function useDelete{{ entity.name }}() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => delete{{ entity.name }}(id),
+    onSuccess: (_, id) => {
+      // Remove from cache
+      queryClient.removeQueries({ queryKey: {{ entity.name | camel_case }}Keys.detail(id) });
+      // Invalidate lists
+      queryClient.invalidateQueries({ queryKey: {{ entity.name | camel_case }}Keys.lists() });
+    },
+{% if config.include_error_handling %}
+    onError: (error: Error) => {
+      console.error('Failed to delete {{ entity.name }}:', error.message);
+    },
+{% endif %}
+  });
+}

@@ -1,0 +1,150 @@
+/**
+ * API client functions for {{ schema_name }}.
+ * Generated at: {{ generated_at }}
+ *
+ * This file is auto-generated. Do not edit directly.
+ */
+
+import type {
+  PaginatedResponse,
+  SuccessResponse,
+{% for entity in entities %}
+  {{ entity.name }},
+  {{ entity.name }}Create,
+  {{ entity.name }}Update,
+  {{ entity.name }}Summary,
+  {{ entity.name }}Filters,
+{% endfor %}
+} from './types';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+
+// =============================================================================
+// HTTP Client
+// =============================================================================
+
+interface RequestOptions extends RequestInit {
+  params?: Record<string, unknown>;
+}
+
+async function apiRequest<T>(
+  endpoint: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const { params, ...fetchOptions } = options;
+
+  // Build URL with query parameters
+  let url = `${API_BASE_URL}${endpoint}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, String(value));
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+  }
+
+  // Set default headers
+  const headers = new Headers(fetchOptions.headers);
+  if (!headers.has('Content-Type') && fetchOptions.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(url, {
+    ...fetchOptions,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || error.message || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// =============================================================================
+// API Functions
+// =============================================================================
+
+{% for entity in entities %}
+// -----------------------------------------------------------------------------
+// {{ entity.name }} API
+// -----------------------------------------------------------------------------
+
+/**
+ * Fetch a paginated list of {{ entity.name_plural }}.
+ */
+export async function get{{ entity.name_plural }}(
+  filters?: {{ entity.name }}Filters
+): Promise<PaginatedResponse<{{ entity.name }}Summary>> {
+  return apiRequest<PaginatedResponse<{{ entity.name }}Summary>>(
+    '/{{ entity.name_plural_snake }}',
+    { params: filters as Record<string, unknown> }
+  );
+}
+
+/**
+ * Fetch a single {{ entity.name }} by ID.
+ */
+export async function get{{ entity.name }}(id: string): Promise<{{ entity.name }}> {
+  return apiRequest<{{ entity.name }}>(`/{{ entity.name_plural_snake }}/${id}`);
+}
+
+/**
+ * Create a new {{ entity.name }}.
+ */
+export async function create{{ entity.name }}(
+  data: {{ entity.name }}Create
+): Promise<{{ entity.name }}> {
+  return apiRequest<{{ entity.name }}>('/{{ entity.name_plural_snake }}', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Update an existing {{ entity.name }}.
+ */
+export async function update{{ entity.name }}(
+  id: string,
+  data: {{ entity.name }}Update
+): Promise<{{ entity.name }}> {
+  return apiRequest<{{ entity.name }}>(`/{{ entity.name_plural_snake }}/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Delete a {{ entity.name }}.
+ */
+export async function delete{{ entity.name }}(id: string): Promise<SuccessResponse> {
+  return apiRequest<SuccessResponse>(`/{{ entity.name_plural_snake }}/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+{% for rel in entity.relationships %}
+/**
+ * Fetch {{ rel.name }} for a {{ entity.name }}.
+ */
+export async function get{{ entity.name }}{{ rel.name | pascal_case }}(
+  {{ entity.name | camel_case }}Id: string{% if rel.is_many %},
+  params?: { page?: number; page_size?: number }{% endif %}
+
+): Promise<{% if rel.is_many %}PaginatedResponse<{{ rel.target_type }}Summary>{% else %}{{ rel.target_type }}{% endif %}> {
+  return apiRequest<{% if rel.is_many %}PaginatedResponse<{{ rel.target_type }}Summary>{% else %}{{ rel.target_type }}{% endif %}>(
+    `/{{ entity.name_plural_snake }}/${{"{"}}{{ entity.name | camel_case }}Id}/{{ rel.name_snake }}`{% if rel.is_many %},
+    { params: params as Record<string, unknown> }{% endif %}
+
+  );
+}
+
+{% endfor %}
+{% endfor %}

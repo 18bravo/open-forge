@@ -1,0 +1,119 @@
+/**
+ * TypeScript types for {{ schema_name }}.
+ * Generated at: {{ generated_at }}
+ *
+ * This file is auto-generated. Do not edit directly.
+ */
+
+// =============================================================================
+// Common Types
+// =============================================================================
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+export interface SuccessResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ErrorResponse {
+  success: boolean;
+  error: string;
+  detail?: string;
+}
+
+// =============================================================================
+// Entity Types
+// =============================================================================
+
+{% for entity in entities %}
+// -----------------------------------------------------------------------------
+// {{ entity.name }}
+// -----------------------------------------------------------------------------
+
+{% if entity.description %}
+/**
+ * {{ entity.description }}
+ */
+{% endif %}
+export interface {{ entity.name }} {
+  {{ entity.primary_key | camel_case if entity.primary_key else 'id' }}: string;
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+{% if prop.description %}
+  /** {{ prop.description }} */
+{% endif %}
+  {{ prop.name | camel_case }}{% if not prop.required %}?{% endif %}: {{ prop.typescript_type }};
+{% endif %}
+{% endfor %}
+{% if entity.has_timestamps %}
+  createdAt: string;
+  updatedAt: string;
+{% endif %}
+}
+
+/**
+ * Payload for creating a new {{ entity.name }}.
+ */
+export interface {{ entity.name }}Create {
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+{% if prop.required %}
+  {{ prop.name | camel_case }}: {{ prop.typescript_type.replace(' | null', '') }};
+{% else %}
+  {{ prop.name | camel_case }}?: {{ prop.typescript_type.replace(' | null', '') }};
+{% endif %}
+{% endif %}
+{% endfor %}
+}
+
+/**
+ * Payload for updating an existing {{ entity.name }}.
+ */
+export interface {{ entity.name }}Update {
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key %}
+  {{ prop.name | camel_case }}?: {{ prop.typescript_type.replace(' | null', '') }};
+{% endif %}
+{% endfor %}
+}
+
+/**
+ * Summary version of {{ entity.name }} for list views.
+ */
+export interface {{ entity.name }}Summary {
+  {{ entity.primary_key | camel_case if entity.primary_key else 'id' }}: string;
+{% for prop in entity.properties %}
+{% if prop.name != entity.primary_key and prop.required and loop.index <= 4 %}
+  {{ prop.name | camel_case }}: {{ prop.typescript_type.replace(' | null', '') }};
+{% endif %}
+{% endfor %}
+{% if entity.has_timestamps %}
+  createdAt: string;
+{% endif %}
+}
+
+{% endfor %}
+// =============================================================================
+// Filter Types
+// =============================================================================
+
+{% for entity in entities %}
+export interface {{ entity.name }}Filters {
+  page?: number;
+  page_size?: number;
+  search?: string;
+{% for prop in entity.properties %}
+{% if prop.is_enum %}
+  {{ prop.name | camel_case }}?: string;
+{% endif %}
+{% endfor %}
+}
+
+{% endfor %}

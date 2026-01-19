@@ -1,0 +1,21 @@
+/**
+ * Generated hooks index.
+ * Generated at: {{ generated_at }}
+ *
+ * This file is auto-generated. Do not edit directly.
+ */
+
+{% for entity in entities %}
+export {
+  {{ entity.name | camel_case }}Keys,
+  use{{ entity.name_plural }},
+  use{{ entity.name }},
+{% for rel in entity.relationships %}
+  use{{ entity.name }}{{ rel.name | pascal_case }},
+{% endfor %}
+  useCreate{{ entity.name }},
+  useUpdate{{ entity.name }},
+  useDelete{{ entity.name }},
+} from '../use-{{ entity.name_snake | replace('_', '-') }}';
+
+{% endfor %}

@@ -1,0 +1,34 @@
+# Dockerfile for Dagster
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create dagster user
+RUN useradd -m -s /bin/bash dagster
+
+# Set working directory
+WORKDIR /opt/dagster
+
+# Install Python dependencies
+COPY requirements-dagster.txt .
+RUN pip install --no-cache-dir -r requirements-dagster.txt
+
+# Create dagster home directory
+RUN mkdir -p /opt/dagster/dagster_home && \
+    chown -R dagster:dagster /opt/dagster
+
+# Copy dagster config
+COPY dagster.yaml /opt/dagster/dagster_home/dagster.yaml
+
+# Switch to dagster user
+USER dagster
+
+# Set environment
+ENV DAGSTER_HOME=/opt/dagster/dagster_home
+
+# Default command
+CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]

@@ -1,0 +1,26 @@
+"""
+Generated router index.
+Generated at: {{ generated_at }}
+
+This file is auto-generated. Do not edit directly.
+"""
+from fastapi import APIRouter
+
+{% for entity in entities %}
+from api.routers.{{ entity.name_snake }} import router as {{ entity.name_snake }}_router
+{% endfor %}
+
+# Create combined router
+router = APIRouter()
+
+# Include all generated routers
+{% for entity in entities %}
+router.include_router({{ entity.name_snake }}_router)
+{% endfor %}
+
+__all__ = [
+    "router",
+{% for entity in entities %}
+    "{{ entity.name_snake }}_router",
+{% endfor %}
+]

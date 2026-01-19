@@ -1,0 +1,90 @@
+{
+  "name": "Sample CRM Analytics Engagement",
+  "description": "Build a unified CRM analytics platform to provide 360-degree customer views, real-time sales dashboards, and predictive analytics for the sales team.",
+  "objective": "Create a data-driven sales platform that increases win rates by 20% and reduces time-to-close by 30%",
+  "priority": "high",
+  "data_sources": [
+    {
+      "source_id": "salesforce-production",
+      "source_type": "saas_application",
+      "access_mode": "read",
+      "config": {
+        "environment": "production",
+        "objects": ["Account", "Contact", "Opportunity", "Task", "Event", "Lead"],
+        "api_version": "v58.0"
+      }
+    },
+    {
+      "source_id": "customer-postgres",
+      "source_type": "database",
+      "access_mode": "read",
+      "config": {
+        "host": "customer-db.internal",
+        "port": 5432,
+        "database": "customer_success",
+        "tables": ["health_scores", "nps_responses", "support_tickets", "usage_metrics"]
+      }
+    },
+    {
+      "source_id": "marketing-hubspot",
+      "source_type": "api",
+      "access_mode": "read",
+      "config": {
+        "base_url": "https://api.hubapi.com",
+        "objects": ["contacts", "companies", "deals", "engagements"]
+      }
+    }
+  ],
+  "agent_config": {
+    "max_iterations": 10,
+    "timeout_minutes": 60,
+    "require_approval_for": [
+      "schema_changes",
+      "data_access",
+      "deployment"
+    ],
+    "confidence_threshold": 0.8
+  },
+  "tags": [
+    "crm",
+    "analytics",
+    "sales",
+    "customer-360"
+  ],
+  "metadata": {
+    "department": "Sales",
+    "sponsor": "VP of Sales",
+    "budget": "75000",
+    "timeline": "Q2 2024",
+    "stakeholders": [
+      {
+        "name": "Sarah Johnson",
+        "role": "VP of Sales",
+        "email": "sarah.johnson@company.com"
+      },
+      {
+        "name": "Mike Chen",
+        "role": "Sales Operations Manager",
+        "email": "mike.chen@company.com"
+      },
+      {
+        "name": "Lisa Park",
+        "role": "Customer Success Lead",
+        "email": "lisa.park@company.com"
+      }
+    ],
+    "success_criteria": [
+      "Pipeline visibility improved by 80%",
+      "Report generation time reduced by 50%",
+      "User adoption rate > 85%",
+      "Data accuracy > 95%"
+    ],
+    "constraints": [
+      "Must comply with GDPR and CCPA",
+      "No direct access to PII without encryption",
+      "Integration with existing SSO required",
+      "Must support mobile access"
+    ]
+  },
+  "requires_approval": true
+}

@@ -1,0 +1,354 @@
+# Sample Ontology for E2E Testing
+# This represents a CRM analytics domain ontology
+
+name: CRM Analytics Ontology
+version: "1.0.0"
+description: |
+  Ontology defining the core entities and relationships for a
+  CRM analytics platform, including customers, opportunities,
+  contacts, and activities.
+
+prefixes:
+  crm: https://openforge.example.com/ontology/crm/
+  linkml: https://w3id.org/linkml/
+  xsd: http://www.w3.org/2001/XMLSchema#
+
+default_range: string
+
+# Entity Definitions
+classes:
+  Customer:
+    description: A customer or account in the CRM system
+    attributes:
+      id:
+        description: Unique identifier for the customer
+        identifier: true
+        range: uuid
+      name:
+        description: Customer company name
+        required: true
+        range: string
+      email:
+        description: Primary contact email
+        range: email
+        pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      industry:
+        description: Industry vertical
+        range: Industry
+      segment:
+        description: Customer segment classification
+        range: CustomerSegment
+      annual_revenue:
+        description: Annual revenue in USD
+        range: decimal
+      employee_count:
+        description: Number of employees
+        range: integer
+      health_score:
+        description: Customer health score (0-100)
+        range: decimal
+        minimum_value: 0
+        maximum_value: 100
+      lifetime_value:
+        description: Total lifetime value
+        range: decimal
+      created_at:
+        description: When the customer was created
+        range: datetime
+        required: true
+      updated_at:
+        description: Last update timestamp
+        range: datetime
+    slots:
+      - id
+      - name
+      - email
+      - industry
+      - segment
+      - annual_revenue
+      - employee_count
+      - health_score
+      - lifetime_value
+      - created_at
+      - updated_at
+
+  Contact:
+    description: A contact person associated with a customer
+    attributes:
+      id:
+        description: Unique identifier
+        identifier: true
+        range: uuid
+      customer_id:
+        description: Reference to the customer
+        range: Customer
+        required: true
+      first_name:
+        description: Contact's first name
+        required: true
+        range: string
+      last_name:
+        description: Contact's last name
+        required: true
+        range: string
+      email:
+        description: Contact email address
+        range: email
+        required: true
+      phone:
+        description: Contact phone number
+        range: string
+      title:
+        description: Job title
+        range: string
+      role:
+        description: Role in the organization
+        range: ContactRole
+      is_primary:
+        description: Whether this is the primary contact
+        range: boolean
+        default_value: false
+      last_contacted_at:
+        description: Last interaction date
+        range: datetime
+
+  Opportunity:
+    description: A sales opportunity
+    attributes:
+      id:
+        description: Unique identifier
+        identifier: true
+        range: uuid
+      customer_id:
+        description: Reference to the customer
+        range: Customer
+        required: true
+      name:
+        description: Opportunity name
+        required: true
+        range: string
+      description:
+        description: Detailed description
+        range: string
+      value:
+        description: Opportunity value in USD
+        range: decimal
+        required: true
+      stage:
+        description: Sales stage
+        range: SalesStage
+        required: true
+      probability:
+        description: Win probability (0-100)
+        range: decimal
+        minimum_value: 0
+        maximum_value: 100
+      expected_close_date:
+        description: Expected close date
+        range: date
+      actual_close_date:
+        description: Actual close date (if closed)
+        range: date
+      owner_id:
+        description: Sales rep owner
+        range: string
+      lead_source:
+        description: Source of the lead
+        range: LeadSource
+      created_at:
+        description: Creation timestamp
+        range: datetime
+        required: true
+
+  Activity:
+    description: A customer interaction activity
+    attributes:
+      id:
+        description: Unique identifier
+        identifier: true
+        range: uuid
+      customer_id:
+        description: Reference to the customer
+        range: Customer
+        required: true
+      contact_id:
+        description: Reference to the contact
+        range: Contact
+      opportunity_id:
+        description: Reference to related opportunity
+        range: Opportunity
+      type:
+        description: Type of activity
+        range: ActivityType
+        required: true
+      subject:
+        description: Activity subject
+        range: string
+        required: true
+      notes:
+        description: Detailed notes
+        range: string
+      occurred_at:
+        description: When the activity occurred
+        range: datetime
+        required: true
+      duration_minutes:
+        description: Duration in minutes
+        range: integer
+      outcome:
+        description: Outcome of the activity
+        range: ActivityOutcome
+      created_by:
+        description: User who created the activity
+        range: string
+
+# Enumerations
+enums:
+  CustomerSegment:
+    description: Customer segmentation
+    permissible_values:
+      enterprise:
+        description: Enterprise customers (>1000 employees)
+      mid_market:
+        description: Mid-market customers (100-1000 employees)
+      smb:
+        description: Small and medium business (<100 employees)
+      startup:
+        description: Startup companies
+
+  Industry:
+    description: Industry verticals
+    permissible_values:
+      technology:
+        description: Technology sector
+      financial_services:
+        description: Financial services
+      healthcare:
+        description: Healthcare and life sciences
+      retail:
+        description: Retail and e-commerce
+      manufacturing:
+        description: Manufacturing
+      other:
+        description: Other industries
+
+  SalesStage:
+    description: Sales pipeline stages
+    permissible_values:
+      prospecting:
+        description: Initial prospecting
+      qualification:
+        description: Qualifying the opportunity
+      needs_analysis:
+        description: Understanding needs
+      proposal:
+        description: Proposal sent
+      negotiation:
+        description: Negotiating terms
+      closed_won:
+        description: Deal won
+      closed_lost:
+        description: Deal lost
+
+  ActivityType:
+    description: Types of customer activities
+    permissible_values:
+      call:
+        description: Phone call
+      email:
+        description: Email communication
+      meeting:
+        description: In-person or virtual meeting
+      demo:
+        description: Product demonstration
+      task:
+        description: Internal task
+      note:
+        description: General note
+
+  ContactRole:
+    description: Contact roles in buying process
+    permissible_values:
+      decision_maker:
+        description: Final decision maker
+      influencer:
+        description: Influences the decision
+      champion:
+        description: Internal champion
+      user:
+        description: End user
+      evaluator:
+        description: Technical evaluator
+
+  LeadSource:
+    description: Sources of leads
+    permissible_values:
+      inbound:
+        description: Inbound marketing
+      outbound:
+        description: Outbound sales
+      referral:
+        description: Customer referral
+      partner:
+        description: Partner referral
+      event:
+        description: Event or conference
+      other:
+        description: Other source
+
+  ActivityOutcome:
+    description: Outcome of activities
+    permissible_values:
+      successful:
+        description: Successful outcome
+      follow_up_needed:
+        description: Follow-up required
+      no_response:
+        description: No response received
+      not_interested:
+        description: Not interested
+
+# Relationships
+slots:
+  customer_contacts:
+    description: Contacts belonging to a customer
+    range: Contact
+    multivalued: true
+    inlined: true
+
+  customer_opportunities:
+    description: Opportunities for a customer
+    range: Opportunity
+    multivalued: true
+    inlined: true
+
+  customer_activities:
+    description: Activities related to a customer
+    range: Activity
+    multivalued: true
+    inlined: true
+
+  opportunity_activities:
+    description: Activities related to an opportunity
+    range: Activity
+    multivalued: true
+    inlined: true
+
+# Validation Rules
+rules:
+  - name: valid_probability
+    description: Probability must be between 0 and 100
+    applies_to: Opportunity
+    expression: probability >= 0 AND probability <= 100
+
+  - name: closed_opportunities_have_date
+    description: Closed opportunities must have actual close date
+    applies_to: Opportunity
+    expression: |
+      (stage == 'closed_won' OR stage == 'closed_lost')
+      IMPLIES actual_close_date IS NOT NULL
+
+  - name: customer_has_primary_contact
+    description: Each customer should have at least one primary contact
+    applies_to: Customer
+    severity: warning

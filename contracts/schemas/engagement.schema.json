@@ -1,0 +1,400 @@
+// contracts/schemas/engagement.schema.json
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://openfoundry.io/schemas/engagement.json",
+    "title": "EngagementState",
+    "description": "Complete state for an FDE engagement",
+    "type": "object",
+    "required": ["engagement_id", "customer_name", "current_phase", "created_at"],
+    "properties": {
+      "engagement_id": {
+        "type": "string",
+        "pattern": "^eng_[a-z0-9_]+_[0-9]{8}$"
+      },
+      "customer_name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255
+      },
+      "current_phase": {
+        "type": "string",
+        "enum": ["discovery", "data_foundation", "application", "deployment", "support"]
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "target_completion": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "discovery": {
+        "$ref": "#/definitions/DiscoveryPhase"
+      },
+      "data_foundation": {
+        "$ref": "#/definitions/DataFoundationPhase"
+      },
+      "application": {
+        "$ref": "#/definitions/ApplicationPhase"
+      },
+      "deployment": {
+        "$ref": "#/definitions/DeploymentPhase"
+      },
+      "human_interactions": {
+        "type": "array",
+        "items": { "$ref": "#/definitions/HumanInteraction" }
+      },
+      "agent_decisions": {
+        "type": "array",
+        "items": { "$ref": "#/definitions/AgentDecision" }
+      },
+      "approvals": {
+        "type": "array",
+        "items": { "$ref": "#/definitions/Approval" }
+      }
+    },
+    "definitions": {
+      "DiscoveryPhase": {
+        "type": "object",
+        "properties": {
+          "problem_statement": { "type": "string" },
+          "stakeholders": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Stakeholder" }
+          },
+          "workflows": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Workflow" }
+          },
+          "data_sources": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/DataSource" }
+          },
+          "use_cases": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/UseCase" }
+          },
+          "success_criteria": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/SuccessCriterion" }
+          }
+        }
+      },
+      "DataFoundationPhase": {
+        "type": "object",
+        "properties": {
+          "ontology_definition": { "type": "string" },
+          "ontology_version": { "type": "string" },
+          "pipeline_definitions": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/PipelineDefinition" }
+          },
+          "data_quality_rules": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/DataQualityRule" }
+          },
+          "build_results": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/BuildResult" }
+          }
+        }
+      },
+      "ApplicationPhase": {
+        "type": "object",
+        "properties": {
+          "application_specs": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ApplicationSpec" }
+          },
+          "action_types": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ActionType" }
+          },
+          "functions": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/FunctionDefinition" }
+          }
+        }
+      },
+      "DeploymentPhase": {
+        "type": "object",
+        "properties": {
+          "deployment_status": { "type": "string" },
+          "monitoring_config": { "type": "object" },
+          "documentation": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/Document" }
+          },
+          "training_materials": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/TrainingMaterial" }
+          }
+        }
+      },
+      "Stakeholder": {
+        "type": "object",
+        "required": ["id", "name", "role"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "department": { "type": "string" },
+          "influence_level": {
+            "type": "string",
+            "enum": ["decision_maker", "influencer", "user", "blocker"]
+          },
+          "interests": { "type": "array", "items": { "type": "string" } },
+          "concerns": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Workflow": {
+        "type": "object",
+        "required": ["id", "name", "steps"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "frequency": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/WorkflowStep" }
+          }
+        }
+      },
+      "WorkflowStep": {
+        "type": "object",
+        "required": ["step_number", "name", "actor"],
+        "properties": {
+          "step_number": { "type": "integer" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "actor": { "type": "string" },
+          "systems_involved": { "type": "array", "items": { "type": "string" } },
+          "data_inputs": { "type": "array", "items": { "type": "string" } },
+          "data_outputs": { "type": "array", "items": { "type": "string" } },
+          "pain_points": { "type": "array", "items": { "type": "string" } },
+          "automation_potential": {
+            "type": "string",
+            "enum": ["none", "low", "medium", "high"]
+          }
+        }
+      },
+      "DataSource": {
+        "type": "object",
+        "required": ["id", "name", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["postgres", "mysql", "snowflake", "bigquery", "s3", "api", "file"]
+          },
+          "connection_config": { "type": "object" },
+          "tables": { "type": "array", "items": { "type": "string" } },
+          "profile": { "$ref": "#/definitions/DataProfile" }
+        }
+      },
+      "DataProfile": {
+        "type": "object",
+        "properties": {
+          "row_count": { "type": "integer" },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ColumnProfile" }
+          }
+        }
+      },
+      "ColumnProfile": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "dtype": { "type": "string" },
+          "null_rate": { "type": "number" },
+          "unique_count": { "type": "integer" },
+          "sample_values": { "type": "array" },
+          "is_potential_id": { "type": "boolean" },
+          "is_potential_fk": { "type": "boolean" }
+        }
+      },
+      "UseCase": {
+        "type": "object",
+        "required": ["id", "name", "priority"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "priority": { "type": "integer", "minimum": 1, "maximum": 10 },
+          "business_value": { "type": "string" },
+          "complexity": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "data_requirements": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "SuccessCriterion": {
+        "type": "object",
+        "required": ["id", "metric", "target"],
+        "properties": {
+          "id": { "type": "string" },
+          "metric": { "type": "string" },
+          "target": { "type": "string" },
+          "measurement_method": { "type": "string" }
+        }
+      },
+      "PipelineDefinition": {
+        "type": "object",
+        "required": ["id", "entity", "source_mapping"],
+        "properties": {
+          "id": { "type": "string" },
+          "entity": { "type": "string" },
+          "source_mapping": { "type": "object" },
+          "transform_code": { "type": "string" },
+          "dagster_asset": { "type": "string" }
+        }
+      },
+      "DataQualityRule": {
+        "type": "object",
+        "required": ["id", "entity", "rule_type"],
+        "properties": {
+          "id": { "type": "string" },
+          "entity": { "type": "string" },
+          "field": { "type": "string" },
+          "rule_type": {
+            "type": "string",
+            "enum": ["not_null", "unique", "range", "pattern", "referential", "custom"]
+          },
+          "parameters": { "type": "object" }
+        }
+      },
+      "BuildResult": {
+        "type": "object",
+        "properties": {
+          "pipeline_id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["success", "failed", "warning"]
+          },
+          "records_processed": { "type": "integer" },
+          "errors": { "type": "array", "items": { "type": "string" } },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApplicationSpec": {
+        "type": "object",
+        "required": ["id", "name", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["workshop", "dashboard", "form", "report"]
+          },
+          "layout": { "type": "object" },
+          "widgets": { "type": "array", "items": { "type": "object" } },
+          "variables": { "type": "array", "items": { "type": "object" } },
+          "events": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "ActionType": {
+        "type": "object",
+        "required": ["id", "name", "target_entity"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "target_entity": { "type": "string" },
+          "parameters": { "type": "array", "items": { "type": "object" } },
+          "validations": { "type": "array", "items": { "type": "object" } },
+          "execution_code": { "type": "string" }
+        }
+      },
+      "FunctionDefinition": {
+        "type": "object",
+        "required": ["id", "name", "code"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "inputs": { "type": "array", "items": { "type": "object" } },
+          "output_type": { "type": "string" },
+          "code": { "type": "string" }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["architecture", "data_dictionary", "api", "runbook", "user_guide"]
+          },
+          "content": { "type": "string" },
+          "format": {
+            "type": "string",
+            "enum": ["markdown", "html", "pdf"]
+          }
+        }
+      },
+      "TrainingMaterial": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["user_guide", "quick_reference", "video_script", "assessment"]
+          },
+          "target_persona": { "type": "string" },
+          "content": { "type": "string" }
+        }
+      },
+      "HumanInteraction": {
+        "type": "object",
+        "required": ["id", "timestamp", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "type": {
+            "type": "string",
+            "enum": ["input", "feedback", "clarification", "approval"]
+          },
+          "content": { "type": "object" },
+          "user_id": { "type": "string" }
+        }
+      },
+      "AgentDecision": {
+        "type": "object",
+        "required": ["id", "timestamp", "agent", "decision"],
+        "properties": {
+          "id": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "agent": { "type": "string" },
+          "phase": { "type": "string" },
+          "decision": { "type": "object" },
+          "reasoning": { "type": "string" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "required": ["id", "request_id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "request_id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected", "modified"]
+          },
+          "approver": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "comments": { "type": "string" }
+        }
+      }
+    }
+  }

@@ -331,7 +331,36 @@ _Pending review._
 _Pending review._
 
 ### Package: api
-_Pending review._
+
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | High | Dependency injection parameters default to None allowing bypass | `engagements.py:268-270`, `approvals.py:292-294` | Remove `= None` defaults from `db`, `user`, `event_bus` parameters; dependencies should be required |
+| 2 | High | Missing response_model on some endpoints returns unvalidated data | `engagements.py:286-325,328-361,364-392` | Add `response_model=` to ontology, activities, and stats endpoints for consistent API contracts |
+| 3 | Medium | Deprecated datetime.utcnow() usage throughout package | All router files (20+ occurrences) | Replace `datetime.utcnow()` with `datetime.now(timezone.utc)` per Python 3.12 deprecation |
+| 4 | Medium | Schemas defined inline in router files instead of schema modules | `reviews.py:22-103`, `approvals.py:19-106`, `observability.py:24-105`, `admin.py:23-267` | Move inline Pydantic models to `api/schemas/` for better organization and reusability |
+| 5 | Medium | Duplicate router declaration in codegen module | `codegen.py:22,289` | Second router shadows first; refactor to use single router with proper path structure |
+| 6 | Low | Inconsistent tracing decorator placement | `health.py:93` vs other endpoints | Apply `@traced()` decorator consistently to all endpoints including liveness_check |
+| 7 | Low | Mock data returned instead of database integration | All routers (many TODO comments) | Complete database integration; current endpoints return mock/stub data |
+| 8 | Low | Import inside function body for conditional availability | `observability.py:149,245,329,397,450,492,555`, `health.py:54,63` | Consider lazy loading pattern or optional dependency handling at module level |
+
+**Positive Observations:**
+- Excellent use of type aliases for dependency injection (`DbSession`, `CurrentUser`, `OptionalUser`, `EventBusDep` in `dependencies.py:189-193`)
+- Consistent use of Pydantic models with `model_config = {"from_attributes": True}` for ORM compatibility
+- Well-structured pagination with generic `PaginatedResponse[T]` class (`schemas/common.py:27-51`)
+- Proper async/await patterns consistently applied across all route handlers
+- Good OpenAPI documentation with `summary`, `description`, and `status_code` on route decorators
+- Observability integration via `@traced()` decorator and `add_span_attribute()` calls
+- Clean router organization with consistent prefix/tags pattern across all modules
+- Proper use of FastAPI `Query()` parameters with validation constraints (ge, le, alias)
+- Good error response model structure (`ErrorResponse`, `ErrorDetail` in `schemas/common.py:54-67`)
+- Database session management properly handles commit/rollback in dependency (`dependencies.py:17-29`)
+- Consistent use of HTTP status codes via `status.HTTP_*` constants
+- Event bus integration for cross-service communication (`EventBusDep` dependency)
+- Permission and role checking factories (`require_permission()`, `require_role()` in `dependencies.py:143-186`)
 
 ### Package: ui
 

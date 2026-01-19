@@ -262,30 +262,34 @@ dependencies = [
     # Core
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    
-    # LLM & Agents
+
+    # LLM & Agents (LangChain Ecosystem)
     "langchain>=0.3",
     "langchain-anthropic>=0.3",
+    "langchain-openai>=0.3",  # For embeddings
     "langgraph>=0.2",
-    "langsmith>=0.1",
-    
+    "langgraph-checkpoint-postgres>=0.1",  # Short-term memory
+    "langgraph-store-postgres>=0.1",  # Long-term memory with pgvector
+    "langsmith>=0.1",  # Observability & evaluation
+    "langchain-mcp-adapters>=0.1",  # MCP tool extensibility
+
     # Data
     "polars>=1.0",
     "sqlalchemy>=2.0",
     "asyncpg>=0.29",
     "redis>=5.0",
     "minio>=7.0",
-    
+
     # Pipeline
     "dagster>=1.7",
     "dagster-postgres>=0.23",
-    
+
     # API
     "fastapi>=0.110",
     "uvicorn>=0.27",
     "websockets>=12.0",
     "strawberry-graphql>=0.220",
-    
+
     # Utilities
     "httpx>=0.27",
     "pyyaml>=6.0",

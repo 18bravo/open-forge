@@ -1,49 +1,58 @@
-"""
-Tests for database connection module.
-"""
+# packages/core/tests/test_database.py
+"""Tests for database operations."""
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-import os
+from sqlalchemy import text
+from core.database.connection import get_async_db
+from core.database.graph import GraphDatabase
 
+@pytest.mark.asyncio
+async def test_database_connection():
+    """Test that we can connect to PostgreSQL."""
+    async with get_async_db() as session:
+        result = await session.execute(text("SELECT 1"))
+        assert result.scalar() == 1
 
-class TestDatabaseConnection:
-    """Tests for database connection management."""
+@pytest.mark.asyncio
+async def test_age_extension_loaded():
+    """Test that Apache AGE is available."""
+    async with get_async_db() as session:
+        result = await session.execute(text(
+            "SELECT extname FROM pg_extension WHERE extname = 'age'"
+        ))
+        assert result.scalar() == 'age'
 
-    @pytest.mark.asyncio
-    async def test_get_async_db_yields_session(self, mock_env_vars, mock_async_session):
-        """Test that get_async_db yields a session."""
-        from core.database.connection import get_async_db
+@pytest.mark.asyncio
+async def test_graph_create_node():
+    """Test creating a node in the graph."""
+    graph = GraphDatabase()
+    async with get_async_db() as session:
+        await graph.initialize(session)
+        
+        node = await graph.create_node(session, "TestNode", {
+            "id": "test-1",
+            "name": "Test"
+        })
+        
+        assert node is not None
 
-        mock_session_factory = MagicMock()
-        mock_context = MagicMock()
-        mock_context.__aenter__ = AsyncMock(return_value=mock_async_session)
-        mock_context.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_context
-
-        with patch("core.database.connection._async_session_factory", mock_session_factory):
-            async with get_async_db() as session:
-                assert session is not None
-
-
-class TestGraphDatabase:
-    """Tests for graph database operations."""
-
-    def test_graph_database_initialization(self, mock_env_vars):
-        """Test GraphDatabase initialization."""
-        from core.database.graph import GraphDatabase
-
-        with patch.dict(os.environ, mock_env_vars, clear=False):
-            graph_db = GraphDatabase()
-            assert graph_db.graph_name == "openforge_graph"
-
-    def test_build_cypher_query(self, mock_env_vars):
-        """Test Cypher query building."""
-        from core.database.graph import GraphDatabase
-
-        with patch.dict(os.environ, mock_env_vars, clear=False):
-            graph_db = GraphDatabase()
-            query = "MATCH (n) RETURN n"
-            wrapped = graph_db._build_query(query)
-
-            assert "openforge_graph" in wrapped
-            assert "MATCH (n) RETURN n" in wrapped
+@pytest.mark.asyncio
+async def test_graph_create_edge():
+    """Test creating an edge between nodes."""
+    graph = GraphDatabase()
+    async with get_async_db() as session:
+        await graph.initialize(session)
+        
+        # Create two nodes
+        await graph.create_node(session, "Person", {"id": "p1", "name": "Alice"})
+        await graph.create_node(session, "Person", {"id": "p2", "name": "Bob"})
+        
+        # Create edge
+        edge = await graph.create_edge(
+            session,
+            "KNOWS",
+            "Person", "id", "p1",
+            "Person", "id", "p2",
+            {"since": "2024"}
+        )
+        
+        assert edge is not None

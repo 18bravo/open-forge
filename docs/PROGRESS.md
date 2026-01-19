@@ -1,6 +1,6 @@
 # Open Forge Development Progress
 
-## Current Status: Gate 7 - Testing & Hardening (Complete)
+## Current Status: Gate 8 - LangChain Ecosystem Integration (In Progress)
 
 **Last Updated:** 2026-01-19
 
@@ -197,11 +197,9 @@ All pages wired to real API with React Query hooks:
 
 ---
 
-## Current Phase: Gate 7 - Testing & Hardening (In Progress)
+### ✅ Gate 7: Testing & Hardening (Complete)
 
-**Started:** 2026-01-19
-
----
+**Completed:** 2026-01-19
 
 ### Gate 7 Work Streams
 
@@ -264,9 +262,61 @@ All pages wired to real API with React Query hooks:
 
 ---
 
-## Next Phase: Production Readiness
+---
 
-### Gate 8: Deployment & Operations
+## Current Phase: Gate 8 - LangChain Ecosystem Integration
+
+### Gate 8: Visual Canvases & LangChain Integration (In Progress)
+
+**Started:** 2026-01-19
+**Estimated Duration:** 4-6 weeks
+**Plan Document:** `docs/plans/2026-01-19-langchain-ecosystem-integration.md`
+
+#### Overview
+
+Integrate the complete LangChain ecosystem, replacing custom implementations with battle-tested components and adding visual canvas interfaces for "AI-generates, user-refines" workflows.
+
+#### Work Packages
+
+| WP | Component | Description | Duration |
+|----|-----------|-------------|----------|
+| WP1 | Agent Canvas | Langflow integration for visual AI agent orchestration | 2 weeks |
+| WP2 | Pipeline Canvas | React Flow + Dagster for visual ETL design | 2-3 weeks |
+| WP3 | Memory Migration | LangGraph PostgresSaver + PostgresStore | 1-2 weeks |
+| WP4 | Agent Patterns | Refactor to create_supervisor + create_react_agent | 2 weeks |
+| WP5 | LangSmith | Observability, tracing, evaluation | 1 week |
+| WP6 | MCP Adapters | Model Context Protocol tool extensibility | 1 week |
+
+#### Key Architectural Changes
+
+| Component | Current | Target |
+|-----------|---------|--------|
+| Agent Canvas | None | Langflow (embedded) |
+| Pipeline Canvas | None | React Flow (custom) |
+| Short-term Memory | PostgresSaver | PostgresSaver (keep) |
+| Long-term Memory | Custom | PostgresStore + pgvector |
+| Observability | Jaeger | LangSmith (self-hosted option) |
+| Tool Framework | Custom | MCP Adapters |
+| Agent Patterns | Custom workflows | create_supervisor + create_react_agent |
+
+#### Why Langflow for Agent Canvas
+
+- LangGraph native support - built-in LangGraph export
+- Pre-built agent components - no need to build from scratch
+- Community maintained - reduced maintenance burden
+- Days to value vs weeks/months for custom build
+
+#### Why React Flow for Pipeline Canvas
+
+- Langflow doesn't understand Dagster's asset-based paradigm
+- Need custom nodes for source/transform/destination patterns
+- Pipeline execution requires Dagster-specific compilation
+
+---
+
+## Future Phase: Production Readiness
+
+### Gate 9: Deployment & Operations
 1. **Production Infrastructure** - Kubernetes manifests, Helm charts
 2. **CI/CD Pipeline** - Automated testing, deployment
 3. **Monitoring & Alerting** - Prometheus, Grafana dashboards

@@ -1,0 +1,100 @@
+version: '3.8'
+
+# Langflow service configuration for Open Forge
+# This extends the main docker-compose.yml and adds Langflow for visual agent canvas
+
+services:
+  # Langflow for visual AI agent workflow design
+  langflow:
+    image: langflowai/langflow:latest
+    container_name: openforge-langflow
+    environment:
+      # Database configuration - uses shared PostgreSQL
+      - LANGFLOW_DATABASE_URL=postgresql://${DB_USER:-foundry}:${DB_PASSWORD:-foundry_dev}@postgres:5432/langflow
+
+      # Langflow configuration
+      - LANGFLOW_CONFIG_DIR=/app/config
+      - LANGFLOW_COMPONENTS_PATH=/app/components
+
+      # Authentication settings
+      - LANGFLOW_AUTO_LOGIN=false
+      - LANGFLOW_SUPERUSER=${LANGFLOW_SUPERUSER:-admin@openforge.io}
+      - LANGFLOW_SUPERUSER_PASSWORD=${LANGFLOW_SUPERUSER_PASSWORD:-changeme}
+
+      # API settings
+      - LANGFLOW_HOST=0.0.0.0
+      - LANGFLOW_PORT=7860
+      - LANGFLOW_WORKERS=4
+
+      # OpenAI/Anthropic API keys (passed through from environment)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Open Forge API endpoint for custom components
+      - OPENFORGE_API_URL=http://api:8000
+      - OPENFORGE_API_KEY=${OPENFORGE_INTERNAL_API_KEY}
+
+      # Redis for caching
+      - LANGFLOW_CACHE_TYPE=redis
+      - LANGFLOW_REDIS_URL=redis://redis:6379/1
+
+      # Logging
+      - LANGFLOW_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "${LANGFLOW_PORT:-7860}:7860"
+    volumes:
+      # Persistent data storage
+      - langflow_data:/app/data
+      # Custom configuration
+      - ./langflow-config:/app/config
+      # Mount custom Open Forge components
+      - ../../packages/langflow-components:/app/components/openforge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - openforge-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.langflow.rule=PathPrefix(`/langflow`)"
+      - "traefik.http.services.langflow.loadbalancer.server.port=7860"
+      - "traefik.http.middlewares.langflow-stripprefix.stripprefix.prefixes=/langflow"
+      - "traefik.http.routers.langflow.middlewares=langflow-stripprefix"
+
+  # Initialize Langflow database schema
+  langflow-init:
+    image: postgres:15-alpine
+    container_name: openforge-langflow-init
+    environment:
+      - PGHOST=postgres
+      - PGUSER=${DB_USER:-foundry}
+      - PGPASSWORD=${DB_PASSWORD:-foundry_dev}
+      - PGDATABASE=${DB_NAME:-foundry}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Creating Langflow database if not exists...';
+      psql -c 'CREATE DATABASE langflow;' 2>/dev/null || echo 'Database langflow already exists';
+      echo 'Langflow database initialization complete';
+      "
+    networks:
+      - openforge-network
+
+volumes:
+  langflow_data:
+    driver: local
+
+networks:
+  openforge-network:
+    external: true

@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: apache/age:latest
+    container_name: foundry-postgres
+    environment:
+      POSTGRES_USER: foundry
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-foundry_dev}
+      POSTGRES_DB: foundry
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foundry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: foundry-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: foundry-minio
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    container_name: foundry-iceberg
+    environment:
+      CATALOG_WAREHOUSE: s3://foundry-lake/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minio}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minio123}
+      AWS_REGION: us-east-1
+      CATALOG_S3_ENDPOINT: http://minio:9000
+    ports:
+      - "8181:8181"
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: foundry-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    ports:
+      - "16686:16686"  # UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    container_name: foundry-dagster
+    environment:
+      DAGSTER_POSTGRES_HOST: postgres
+      DAGSTER_POSTGRES_USER: foundry
+      DAGSTER_POSTGRES_PASSWORD: ${DB_PASSWORD:-foundry_dev}
+      DAGSTER_POSTGRES_DB: foundry
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./packages/pipelines:/opt/dagster/app
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

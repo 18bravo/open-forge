@@ -1015,6 +1015,67 @@ make e2e-test
 # Full engagement flow passes
 ```
 
+### Gate 6: Code Generation & Enablement (End of Week 14)
+**Required Deliverables:**
+- [ ] Code generation engine with 4 generators (FastAPI, ORM, Tests, Hooks)
+- [ ] Enablement agent cluster (Documentation, Training, Support)
+- [ ] Operations agent cluster (Monitoring, Scaling, Maintenance, Incident)
+- [ ] Code generation API endpoints
+
+**Verification:**
+```bash
+make test-codegen
+make test-enablement-agents
+make test-operations-agents
+```
+
+### Gate 7: Testing & Hardening (End of Week 16)
+**Required Deliverables:**
+- [ ] UI component tests (170+ tests)
+- [ ] Performance benchmarks and load tests
+- [ ] Security audit (OWASP Top 10 coverage)
+- [ ] All integration tests passing
+
+**Verification:**
+```bash
+make test-ui
+make test-performance
+make test-security
+```
+
+### Gate 8: Visual Canvases & LangChain Ecosystem (End of Week 22)
+**Required Deliverables:**
+- [ ] Langflow integration for Agent Canvas (AI-generates, user-refines)
+- [ ] React Flow Pipeline Canvas with Dagster compilation
+- [ ] LangGraph memory migration (PostgresStore + pgvector)
+- [ ] Agent pattern refactoring (create_supervisor, create_react_agent)
+- [ ] LangSmith observability integration
+- [ ] MCP Adapters for tool extensibility
+
+**Verification:**
+```bash
+make test-canvas
+make test-memory-migration
+make test-langsmith
+make test-mcp
+```
+
+**Plan Document:** `docs/plans/2026-01-19-langchain-ecosystem-integration.md`
+
+### Gate 9: Production Deployment (End of Week 26)
+**Required Deliverables:**
+- [ ] Kubernetes manifests and Helm charts
+- [ ] CI/CD pipeline with automated testing
+- [ ] Prometheus + Grafana monitoring
+- [ ] Production documentation
+
+**Verification:**
+```bash
+make deploy-staging
+make e2e-test-staging
+make deploy-production
+```
+
 ---
 
 ## 6. Agent Assignment Matrix

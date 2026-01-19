@@ -1,173 +1,95 @@
 """
-LangGraph workflow construction utilities.
+LangGraph builder utilities for creating agent workflows.
 """
-from typing import Callable, Dict, List, Optional, Any, Type
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from pydantic import BaseModel
+from core.config import get_settings
 
-from agent_framework.state_management import AgentState
+settings = get_settings()
 
+StateType = TypeVar("StateType", bound=BaseModel)
 
-class WorkflowBuilder:
-    """
-    Fluent builder for LangGraph workflows.
-
-    Example:
-        builder = WorkflowBuilder(DiscoveryState)
-        graph = (builder
-            .add_node("analyze", analyze_node)
-            .add_node("validate", validate_node)
-            .add_node("review", review_node)
-            .set_entry("analyze")
-            .add_edge("analyze", "validate")
-            .add_conditional("validate", route_validation)
-            .build())
-    """
-
-    def __init__(self, state_class: Type[AgentState] = AgentState):
+class AgentGraphBuilder:
+    """Builder for creating LangGraph agent workflows."""
+    
+    def __init__(self, state_class: Type[StateType]):
         self.state_class = state_class
-        self._graph = StateGraph(state_class)
-        self._entry_point: Optional[str] = None
+        self.workflow = StateGraph(state_class)
         self._nodes: Dict[str, Callable] = {}
         self._edges: List[tuple] = []
         self._conditional_edges: List[tuple] = []
-
-    def add_node(self, name: str, node_fn: Callable) -> "WorkflowBuilder":
+        self._entry_point: Optional[str] = None
+    
+    def add_node(self, name: str, func: Callable) -> "AgentGraphBuilder":
         """Add a node to the graph."""
-        self._nodes[name] = node_fn
-        self._graph.add_node(name, node_fn)
+        self._nodes[name] = func
+        self.workflow.add_node(name, func)
         return self
-
-    def set_entry(self, node_name: str) -> "WorkflowBuilder":
-        """Set the entry point of the graph."""
-        self._entry_point = node_name
-        self._graph.set_entry_point(node_name)
-        return self
-
-    def add_edge(self, from_node: str, to_node: str) -> "WorkflowBuilder":
+    
+    def add_edge(self, from_node: str, to_node: str) -> "AgentGraphBuilder":
         """Add a direct edge between nodes."""
         self._edges.append((from_node, to_node))
-        if to_node == "END":
-            self._graph.add_edge(from_node, END)
-        else:
-            self._graph.add_edge(from_node, to_node)
+        self.workflow.add_edge(from_node, to_node)
         return self
-
-    def add_conditional(
+    
+    def add_conditional_edge(
         self,
         from_node: str,
-        condition_fn: Callable[[AgentState], str],
-        route_map: Optional[Dict[str, str]] = None
-    ) -> "WorkflowBuilder":
-        """Add a conditional edge based on a routing function."""
-        self._conditional_edges.append((from_node, condition_fn, route_map))
-
-        if route_map:
-            # Map includes END handling
-            mapped_routes = {}
-            for key, target in route_map.items():
-                mapped_routes[key] = END if target == "END" else target
-            self._graph.add_conditional_edges(from_node, condition_fn, mapped_routes)
-        else:
-            self._graph.add_conditional_edges(from_node, condition_fn)
-
+        condition: Callable,
+        path_map: Dict[str, str]
+    ) -> "AgentGraphBuilder":
+        """Add a conditional edge from a node."""
+        self._conditional_edges.append((from_node, condition, path_map))
+        self.workflow.add_conditional_edges(from_node, condition, path_map)
         return self
-
-    def build(self) -> StateGraph:
-        """Build and return the graph."""
-        if not self._entry_point:
-            raise ValueError("Entry point not set. Call set_entry() first.")
-        return self._graph
-
-    def compile(self, checkpointer: Optional[MemorySaver] = None):
-        """Build and compile the graph."""
-        graph = self.build()
-        return graph.compile(checkpointer=checkpointer)
-
-
-def create_approval_subgraph() -> StateGraph:
-    """
-    Create a reusable approval workflow subgraph.
-
-    Flow:
-    1. Request approval
-    2. Wait for response
-    3. Route based on approval/rejection
-    """
-
-    async def request_approval(state: AgentState) -> Dict[str, Any]:
-        """Mark state as requiring approval."""
-        return {
-            "requires_human_review": True,
-            "current_step": "awaiting_approval"
-        }
-
-    async def check_approval(state: AgentState) -> str:
-        """Check if approval was granted."""
-        context = state.get("agent_context", {})
-        human_inputs = context.get("human_inputs", [])
-
-        for input_item in human_inputs:
-            if input_item.get("type") == "approval_response":
-                if input_item.get("approved"):
-                    return "approved"
-                return "rejected"
-
-        return "pending"
-
-    async def handle_approved(state: AgentState) -> Dict[str, Any]:
-        return {
-            "requires_human_review": False,
-            "current_step": "approved"
-        }
-
-    async def handle_rejected(state: AgentState) -> Dict[str, Any]:
-        return {
-            "requires_human_review": False,
-            "current_step": "rejected",
-            "errors": ["Approval was rejected"]
-        }
-
-    builder = WorkflowBuilder(AgentState)
-    graph = (builder
-        .add_node("request_approval", request_approval)
-        .add_node("approved", handle_approved)
-        .add_node("rejected", handle_rejected)
-        .set_entry("request_approval")
-        .add_conditional("request_approval", check_approval, {
-            "approved": "approved",
-            "rejected": "rejected",
-            "pending": "END"
-        })
-        .add_edge("approved", "END")
-        .add_edge("rejected", "END")
-        .build())
-
-    return graph
+    
+    def set_entry_point(self, node: str) -> "AgentGraphBuilder":
+        """Set the entry point of the graph."""
+        self._entry_point = node
+        self.workflow.set_entry_point(node)
+        return self
+    
+    def set_finish_point(self, node: str) -> "AgentGraphBuilder":
+        """Set a node as a finish point."""
+        self.workflow.add_edge(node, END)
+        return self
+    
+    async def build(self, checkpointer: bool = True) -> Any:
+        """Build and return the compiled graph."""
+        if checkpointer:
+            saver = await AsyncPostgresSaver.from_conn_string(
+                settings.database.async_connection_string
+            )
+            await saver.setup()
+            return self.workflow.compile(checkpointer=saver)
+        return self.workflow.compile()
+    
+    def build_sync(self, checkpointer: bool = False) -> Any:
+        """Build and return the compiled graph (sync version)."""
+        return self.workflow.compile()
 
 
-def create_retry_wrapper(
-    node_fn: Callable,
-    max_retries: int = 3,
-    retry_on_errors: Optional[List[Type[Exception]]] = None
-) -> Callable:
-    """
-    Wrap a node function with retry logic.
-    """
-    retry_errors = retry_on_errors or [Exception]
-
-    async def wrapped(state: AgentState) -> Dict[str, Any]:
-        last_error = None
-        for attempt in range(max_retries):
-            try:
-                return await node_fn(state)
-            except tuple(retry_errors) as e:
-                last_error = e
-                if attempt < max_retries - 1:
-                    continue
-
-        return {
-            "errors": [f"Node failed after {max_retries} attempts: {str(last_error)}"]
-        }
-
-    return wrapped
+def create_subgraph(
+    name: str,
+    state_class: Type[StateType],
+    nodes: Dict[str, Callable],
+    edges: List[tuple],
+    entry_point: str
+) -> StateGraph:
+    """Create a subgraph that can be used as a node."""
+    builder = AgentGraphBuilder(state_class)
+    
+    for node_name, func in nodes.items():
+        builder.add_node(node_name, func)
+    
+    for edge in edges:
+        if len(edge) == 2:
+            builder.add_edge(edge[0], edge[1])
+        else:
+            builder.add_conditional_edge(edge[0], edge[1], edge[2])
+    
+    builder.set_entry_point(entry_point)
+    
+    return builder.build_sync(checkpointer=False)

@@ -6,13 +6,10 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator, Generator
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session, sessionmaker, declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 from core.config import get_settings
 
 settings = get_settings()
-
-# Base class for SQLAlchemy models
-Base = declarative_base()
 
 # Sync engine
 sync_engine = create_engine(
@@ -40,7 +37,6 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
-
 @contextmanager
 def get_db() -> Generator[Session, None, None]:
     """Get synchronous database session."""
@@ -54,7 +50,6 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-
 @asynccontextmanager
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """Get asynchronous database session."""
@@ -65,14 +60,3 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-
-
-async def init_db() -> None:
-    """Initialize database tables."""
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
-async def close_db() -> None:
-    """Close database connections."""
-    await async_engine.dispose()

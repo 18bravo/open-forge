@@ -1,0 +1,404 @@
+# Default values for open-forge.
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  # Image pull secrets for private registries
+  imagePullSecrets: []
+  # Storage class for persistent volumes
+  storageClass: ""
+
+# Common labels to add to all resources
+commonLabels: {}
+
+# Common annotations to add to all resources
+commonAnnotations: {}
+
+# Namespace configuration
+namespace:
+  create: true
+  name: ""  # Defaults to release namespace
+
+# =========================================
+# API Configuration
+# =========================================
+api:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/18bravo/open-forge-api
+    tag: ""  # Defaults to appVersion
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    hosts:
+      - host: api.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-api-tls
+        hosts:
+          - api.open-forge.io
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  nodeSelector: {}
+  tolerations: []
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: api
+            topologyKey: kubernetes.io/hostname
+
+  env:
+    LOG_LEVEL: INFO
+
+  # Health check configuration
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+# =========================================
+# UI Configuration
+# =========================================
+ui:
+  enabled: true
+
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/18bravo/open-forge-ui
+    tag: ""
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: www.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-ui-tls
+        hosts:
+          - open-forge.io
+          - www.open-forge.io
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  env:
+    NODE_ENV: production
+
+# =========================================
+# Dagster Configuration
+# =========================================
+dagster:
+  enabled: true
+
+  webserver:
+    replicaCount: 1
+    image:
+      repository: ghcr.io/18bravo/open-forge-dagster
+      tag: ""
+      pullPolicy: Always
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  daemon:
+    enabled: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: dagster.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  config:
+    maxConcurrentRuns: 10
+
+# =========================================
+# Langflow Configuration
+# =========================================
+langflow:
+  enabled: true
+
+  replicaCount: 1
+
+  image:
+    repository: langflowai/langflow
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 7860
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: langflow.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: langflow-tls
+        hosts:
+          - langflow.open-forge.io
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+
+  config:
+    workers: 4
+    autoLogin: false
+    logLevel: INFO
+
+# =========================================
+# Database Configuration
+# =========================================
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: ""
+    username: openforge
+    password: ""
+    database: openforge
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    extendedConfiguration: |
+      max_connections = 200
+      shared_buffers = 1GB
+  image:
+    repository: pgvector/pgvector
+    tag: pg16
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+minio:
+  enabled: true
+  auth:
+    rootUser: minio
+    rootPassword: ""
+  persistence:
+    enabled: true
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  defaultBuckets: "open-forge-uploads,open-forge-exports,dagster-logs"
+
+# =========================================
+# Secrets Configuration
+# =========================================
+secrets:
+  # Use existing secret instead of creating one
+  existingSecret: ""
+
+  # External Secrets configuration
+  externalSecrets:
+    enabled: false
+    secretStoreRef:
+      kind: ClusterSecretStore
+      name: vault-backend
+    refreshInterval: 1h
+    # Remote key prefix in secret store
+    keyPrefix: open-forge
+
+  # Values for secret (only used if existingSecret is empty and externalSecrets is disabled)
+  values:
+    jwtSecret: ""
+    nextauthSecret: ""
+    openaiApiKey: ""
+    anthropicApiKey: ""
+
+# =========================================
+# ConfigMap Configuration
+# =========================================
+config:
+  logLevel: INFO
+  apiUrl: https://api.open-forge.io
+  websocketUrl: wss://api.open-forge.io/ws
+  corsOrigins: "https://open-forge.io,https://www.open-forge.io"
+
+  # Feature flags
+  features:
+    langflowEnabled: true
+    dagsterEnabled: true
+    vectorSearchEnabled: true
+
+# =========================================
+# Service Account Configuration
+# =========================================
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# =========================================
+# Pod Security Configuration
+# =========================================
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# =========================================
+# Monitoring Configuration
+# =========================================
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}

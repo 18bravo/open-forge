@@ -1,0 +1,1560 @@
+openapi: 3.0.3
+info:
+  title: Open Forge API
+  description: |
+    Open Forge is an autonomous Forward Deployed Engineering (FDE) platform that uses AI agents
+    to automate data engineering, ontology design, and application development workflows.
+
+    ## Overview
+
+    The API provides access to:
+    - **Engagements**: Manage customer engagements through discovery, design, build, and deploy phases
+    - **Agents**: Execute and monitor AI agent tasks
+    - **Data Sources**: Connect and manage various data sources
+    - **Pipelines**: Configure and run data pipelines via Dagster
+    - **Approvals**: Human-in-the-loop approval workflows
+
+    ## Authentication
+
+    All API requests require authentication via API key or JWT token.
+    See the [Authentication Guide](./authentication.md) for details.
+
+    ## Rate Limiting
+
+    API requests are rate limited based on your subscription tier.
+    See [Rate Limiting](./rate-limiting.md) for details.
+
+  version: 0.1.0
+  contact:
+    name: Open Forge Team
+    url: https://github.com/18bravo/open-forge
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.openforge.io/v1
+    description: Production server
+
+tags:
+  - name: Health
+    description: Health check endpoints for monitoring
+  - name: Engagements
+    description: Manage customer engagements
+  - name: Agents
+    description: AI agent task management
+  - name: Data Sources
+    description: Data source connection management
+  - name: Approvals
+    description: Human-in-the-loop approval workflows
+  - name: Pipelines
+    description: Data pipeline management
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Basic health check
+      description: Returns basic health status of the API
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness check
+      description: Checks if the API and all dependencies are ready
+      operationId: readinessCheck
+      responses:
+        '200':
+          description: API and dependencies are ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: One or more dependencies are not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness check
+      description: Simple liveness probe for Kubernetes
+      operationId: livenessCheck
+      responses:
+        '200':
+          description: API process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /engagements:
+    get:
+      tags:
+        - Engagements
+      summary: List engagements
+      description: Returns a paginated list of engagements
+      operationId: listEngagements
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            $ref: '#/components/schemas/EngagementStatus'
+        - name: priority
+          in: query
+          description: Filter by priority
+          schema:
+            $ref: '#/components/schemas/EngagementPriority'
+      responses:
+        '200':
+          description: List of engagements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEngagementSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Engagements
+      summary: Create engagement
+      description: Creates a new engagement
+      operationId: createEngagement
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngagementCreate'
+      responses:
+        '201':
+          description: Engagement created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /engagements/{engagementId}:
+    get:
+      tags:
+        - Engagements
+      summary: Get engagement
+      description: Returns detailed information about an engagement
+      operationId: getEngagement
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/engagementId'
+      responses:
+        '200':
+          description: Engagement details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Engagements
+      summary: Update engagement
+      description: Updates an existing engagement
+      operationId: updateEngagement
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/engagementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngagementUpdate'
+      responses:
+        '200':
+          description: Engagement updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Engagements
+      summary: Delete engagement
+      description: Deletes an engagement
+      operationId: deleteEngagement
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/engagementId'
+      responses:
+        '200':
+          description: Engagement deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /engagements/{engagementId}/status:
+    put:
+      tags:
+        - Engagements
+      summary: Update engagement status
+      description: Updates the status of an engagement
+      operationId: updateEngagementStatus
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/engagementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngagementStatusUpdate'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /agents/tasks:
+    get:
+      tags:
+        - Agents
+      summary: List agent tasks
+      description: Returns a paginated list of agent tasks
+      operationId: listAgentTasks
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: engagement_id
+          in: query
+          description: Filter by engagement
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            $ref: '#/components/schemas/AgentTaskStatus'
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAgentTaskSummary'
+
+    post:
+      tags:
+        - Agents
+      summary: Create agent task
+      description: Creates a new agent task for an engagement
+      operationId: createAgentTask
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTaskCreate'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTaskResponse'
+
+  /agents/tasks/{taskId}:
+    get:
+      tags:
+        - Agents
+      summary: Get task details
+      description: Returns detailed information about a specific task
+      operationId: getAgentTask
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTaskResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/tasks/{taskId}/messages:
+    get:
+      tags:
+        - Agents
+      summary: Get task messages
+      description: Returns the conversation history for a task
+      operationId: getTaskMessages
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Task messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentMessage'
+
+  /agents/tasks/{taskId}/stream:
+    get:
+      tags:
+        - Agents
+      summary: Stream task events
+      description: Server-sent events stream for real-time task updates
+      operationId: streamTaskEvents
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /agents/tasks/{taskId}/approve-tool:
+    post:
+      tags:
+        - Agents
+      summary: Approve tool execution
+      description: Approves or rejects a pending tool call
+      operationId: approveToolExecution
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolApprovalRequest'
+      responses:
+        '200':
+          description: Approval processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTaskResponse'
+
+  /agents/tasks/{taskId}/cancel:
+    post:
+      tags:
+        - Agents
+      summary: Cancel task
+      description: Cancels a running task
+      operationId: cancelAgentTask
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTaskCancel'
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTaskResponse'
+
+  /agents/tasks/{taskId}/retry:
+    post:
+      tags:
+        - Agents
+      summary: Retry task
+      description: Retries a failed task
+      operationId: retryAgentTask
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/taskId'
+      responses:
+        '200':
+          description: New task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTaskResponse'
+
+  /data-sources:
+    get:
+      tags:
+        - Data Sources
+      summary: List data sources
+      description: Returns a paginated list of data sources
+      operationId: listDataSources
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: type
+          in: query
+          description: Filter by source type
+          schema:
+            $ref: '#/components/schemas/DataSourceType'
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            $ref: '#/components/schemas/DataSourceStatus'
+        - name: search
+          in: query
+          description: Search by name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of data sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDataSourceSummary'
+
+    post:
+      tags:
+        - Data Sources
+      summary: Create data source
+      description: Creates a new data source connection
+      operationId: createDataSource
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataSourceCreate'
+      responses:
+        '201':
+          description: Data source created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceResponse'
+
+  /data-sources/{sourceId}:
+    get:
+      tags:
+        - Data Sources
+      summary: Get data source
+      description: Returns detailed information about a data source
+      operationId: getDataSource
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/sourceId'
+      responses:
+        '200':
+          description: Data source details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Data Sources
+      summary: Update data source
+      description: Updates a data source configuration
+      operationId: updateDataSource
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/sourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataSourceUpdate'
+      responses:
+        '200':
+          description: Data source updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceResponse'
+
+    delete:
+      tags:
+        - Data Sources
+      summary: Delete data source
+      description: Deletes a data source
+      operationId: deleteDataSource
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/sourceId'
+      responses:
+        '200':
+          description: Data source deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /data-sources/{sourceId}/test:
+    post:
+      tags:
+        - Data Sources
+      summary: Test connection
+      description: Tests the connection to a data source
+      operationId: testDataSourceConnection
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/sourceId'
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionTestResult'
+
+  /data-sources/{sourceId}/schema:
+    get:
+      tags:
+        - Data Sources
+      summary: Get schema
+      description: Returns the schema information for a data source
+      operationId: getDataSourceSchema
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/sourceId'
+        - name: refresh
+          in: query
+          description: Force refresh schema
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Schema information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataSourceSchema'
+
+  /approvals:
+    get:
+      tags:
+        - Approvals
+      summary: List pending approvals
+      description: Returns a paginated list of pending approval requests
+      operationId: listApprovals
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: engagement_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of approvals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedApprovalRequest'
+
+  /approvals/{approvalId}:
+    get:
+      tags:
+        - Approvals
+      summary: Get approval details
+      description: Returns detailed information about an approval request
+      operationId: getApproval
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/approvalId'
+      responses:
+        '200':
+          description: Approval details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+
+  /approvals/{approvalId}/approve:
+    post:
+      tags:
+        - Approvals
+      summary: Approve request
+      description: Approves a pending request
+      operationId: approveRequest
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/approvalId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: Approval processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+
+  /approvals/{approvalId}/reject:
+    post:
+      tags:
+        - Approvals
+      summary: Reject request
+      description: Rejects a pending request
+      operationId: rejectRequest
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/approvalId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: Rejection processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication endpoint
+
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for service-to-service communication
+
+  parameters:
+    page:
+      name: page
+      in: query
+      description: Page number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    pageSize:
+      name: page_size
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    engagementId:
+      name: engagementId
+      in: path
+      required: true
+      description: Engagement ID
+      schema:
+        type: string
+        format: uuid
+
+    taskId:
+      name: taskId
+      in: path
+      required: true
+      description: Task ID
+      schema:
+        type: string
+        format: uuid
+
+    sourceId:
+      name: sourceId
+      in: path
+      required: true
+      description: Data source ID
+      schema:
+        type: string
+        format: uuid
+
+    approvalId:
+      name: approvalId
+      in: path
+      required: true
+      description: Approval request ID
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Permission denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per hour
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when limit resets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy, alive]
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        components:
+          type: object
+          additionalProperties:
+            type: string
+
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+    PaginationMeta:
+      type: object
+      required:
+        - total
+        - page
+        - page_size
+        - total_pages
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+        has_next:
+          type: boolean
+        has_prev:
+          type: boolean
+
+    EngagementStatus:
+      type: string
+      enum:
+        - draft
+        - pending_approval
+        - approved
+        - in_progress
+        - paused
+        - completed
+        - cancelled
+        - failed
+
+    EngagementPriority:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+        - critical
+
+    DataSourceReference:
+      type: object
+      required:
+        - source_id
+        - source_type
+      properties:
+        source_id:
+          type: string
+        source_type:
+          type: string
+        access_mode:
+          type: string
+          default: read
+          enum: [read, write, readwrite]
+        config:
+          type: object
+          additionalProperties: true
+
+    EngagementCreate:
+      type: object
+      required:
+        - name
+        - objective
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        objective:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/EngagementPriority'
+        data_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataSourceReference'
+        agent_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        requires_approval:
+          type: boolean
+          default: true
+
+    EngagementUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        objective:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/EngagementPriority'
+        data_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataSourceReference'
+        agent_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    EngagementResponse:
+      type: object
+      required:
+        - id
+        - name
+        - objective
+        - status
+        - priority
+        - requires_approval
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        objective:
+          type: string
+        status:
+          $ref: '#/components/schemas/EngagementStatus'
+        priority:
+          $ref: '#/components/schemas/EngagementPriority'
+        data_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataSourceReference'
+        agent_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        requires_approval:
+          type: boolean
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+
+    EngagementSummary:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - priority
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/EngagementStatus'
+        priority:
+          $ref: '#/components/schemas/EngagementPriority'
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EngagementStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/EngagementStatus'
+        reason:
+          type: string
+
+    PaginatedEngagementSummary:
+      type: object
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EngagementSummary'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    AgentTaskStatus:
+      type: string
+      enum:
+        - pending
+        - queued
+        - running
+        - waiting_approval
+        - completed
+        - failed
+        - cancelled
+
+    AgentTaskCreate:
+      type: object
+      required:
+        - engagement_id
+        - task_type
+        - description
+      properties:
+        engagement_id:
+          type: string
+        task_type:
+          type: string
+        description:
+          type: string
+        input_data:
+          type: object
+          additionalProperties: true
+        tools:
+          type: array
+          items:
+            type: string
+        max_iterations:
+          type: integer
+          default: 10
+        timeout_seconds:
+          type: integer
+          default: 300
+        metadata:
+          type: object
+          additionalProperties: true
+
+    AgentTaskResponse:
+      type: object
+      required:
+        - id
+        - engagement_id
+        - task_type
+        - description
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        engagement_id:
+          type: string
+        task_type:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/AgentTaskStatus'
+        input_data:
+          type: object
+          additionalProperties: true
+        output_data:
+          type: object
+          additionalProperties: true
+        tools:
+          type: array
+          items:
+            type: string
+        max_iterations:
+          type: integer
+        timeout_seconds:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    AgentTaskSummary:
+      type: object
+      required:
+        - id
+        - task_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        task_type:
+          type: string
+        status:
+          $ref: '#/components/schemas/AgentTaskStatus'
+        created_at:
+          type: string
+          format: date-time
+
+    PaginatedAgentTaskSummary:
+      type: object
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentTaskSummary'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    AgentMessage:
+      type: object
+      required:
+        - id
+        - role
+        - content
+        - timestamp
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        content:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        tool_calls:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    ToolApprovalRequest:
+      type: object
+      required:
+        - tool_call_id
+        - approved
+      properties:
+        tool_call_id:
+          type: string
+        approved:
+          type: boolean
+        comment:
+          type: string
+
+    AgentTaskCancel:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    DataSourceType:
+      type: string
+      enum:
+        - postgresql
+        - mysql
+        - s3
+        - gcs
+        - azure_blob
+        - iceberg
+        - delta
+        - parquet
+        - csv
+        - api
+        - kafka
+
+    DataSourceStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+        - error
+        - testing
+
+    DataSourceCreate:
+      type: object
+      required:
+        - name
+        - source_type
+        - connection_config
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        source_type:
+          $ref: '#/components/schemas/DataSourceType'
+        connection_config:
+          type: object
+          additionalProperties: true
+          description: Type-specific connection configuration
+        schema_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DataSourceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 2000
+        connection_config:
+          type: object
+          additionalProperties: true
+        schema_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    DataSourceResponse:
+      type: object
+      required:
+        - id
+        - name
+        - source_type
+        - status
+        - connection_config
+        - created_by
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        source_type:
+          $ref: '#/components/schemas/DataSourceType'
+        status:
+          $ref: '#/components/schemas/DataSourceStatus'
+        connection_config:
+          type: object
+          additionalProperties: true
+          description: Sensitive fields redacted
+        schema_config:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_tested_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+
+    DataSourceSummary:
+      type: object
+      required:
+        - id
+        - name
+        - source_type
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        source_type:
+          $ref: '#/components/schemas/DataSourceType'
+        status:
+          $ref: '#/components/schemas/DataSourceStatus'
+        created_at:
+          type: string
+          format: date-time
+
+    PaginatedDataSourceSummary:
+      type: object
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataSourceSummary'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ConnectionTestResult:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        latency_ms:
+          type: number
+
+    DataSourceSchema:
+      type: object
+      required:
+        - source_id
+        - tables
+        - last_refreshed
+      properties:
+        source_id:
+          type: string
+        tables:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        last_refreshed:
+          type: string
+          format: date-time
+
+    ApprovalRequest:
+      type: object
+      required:
+        - id
+        - type
+        - title
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        engagement_id:
+          type: string
+        requested_by:
+          type: string
+        items_to_review:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        decision_comment:
+          type: string
+
+    PaginatedApprovalRequest:
+      type: object
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalRequest'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ApprovalDecision:
+      type: object
+      properties:
+        comment:
+          type: string

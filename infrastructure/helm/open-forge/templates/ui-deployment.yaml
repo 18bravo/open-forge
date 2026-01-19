@@ -1,0 +1,212 @@
+{{- if .Values.ui.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "open-forge.fullname" . }}-ui
+  labels:
+    {{- include "open-forge.ui.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.ui.autoscaling.enabled }}
+  replicas: {{ .Values.ui.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "open-forge.ui.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "open-forge.ui.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/api/metrics"
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "open-forge.ui.serviceAccountName" . }}
+      securityContext:
+        {{- include "open-forge.podSecurityContext" . | nindent 8 }}
+      {{- with .Values.ui.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ui
+          image: {{ include "open-forge.ui.image" . }}
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          securityContext:
+            {{- include "open-forge.securityContext" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.ui.env.NODE_ENV | default "production" | quote }}
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "open-forge.configMapName" . }}
+                  key: api-url
+            - name: NEXT_PUBLIC_WS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "open-forge.configMapName" . }}
+                  key: websocket-url
+            - name: NEXT_PUBLIC_LANGFLOW_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "open-forge.configMapName" . }}
+                  key: langflow-public-url
+            - name: NEXTAUTH_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "open-forge.configMapName" . }}
+                  key: nextauth-url
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "open-forge.secretsName" . }}
+                  key: nextauth-secret
+            {{- range $key, $value := .Values.ui.env }}
+            {{- if ne $key "NODE_ENV" }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: nextjs-cache
+              mountPath: /app/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: nextjs-cache
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30
+---
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "open-forge.ui.serviceAccountName" . }}
+  labels:
+    {{- include "open-forge.ui.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+---
+{{- if .Values.ui.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "open-forge.fullname" . }}-ui-pdb
+  labels:
+    {{- include "open-forge.ui.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.ui.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "open-forge.ui.selectorLabels" . | nindent 6 }}
+{{- end }}
+---
+{{- if .Values.ui.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "open-forge.fullname" . }}-ui-hpa
+  labels:
+    {{- include "open-forge.ui.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "open-forge.fullname" . }}-ui
+  minReplicas: {{ .Values.ui.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.ui.autoscaling.maxReplicas }}
+  metrics:
+    {{- if .Values.ui.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.ui.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if .Values.ui.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.ui.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+{{- end }}
+{{- end }}

@@ -1,0 +1,45 @@
+# Open Forge Global ConfigMap
+# Non-sensitive configuration shared across services
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open-forge-config
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+data:
+  # Logging
+  log-level: "INFO"
+
+  # API Configuration
+  api-url: "https://api.open-forge.io"
+  websocket-url: "wss://api.open-forge.io/ws"
+  cors-origins: "https://open-forge.io,https://www.open-forge.io"
+
+  # Internal Service URLs
+  langflow-url: "http://langflow"
+  langflow-public-url: "https://langflow.open-forge.io"
+  dagster-url: "http://dagster-webserver"
+
+  # NextAuth Configuration
+  nextauth-url: "https://open-forge.io"
+
+  # Database Configuration (non-sensitive)
+  postgres-host: "postgres"
+  postgres-port: "5432"
+  postgres-db: "openforge"
+
+  # Redis Configuration
+  redis-host: "redis"
+  redis-port: "6379"
+
+  # MinIO Configuration
+  minio-endpoint: "minio:9000"
+  minio-region: "us-east-1"
+  minio-use-ssl: "false"
+
+  # Feature Flags
+  feature-langflow-enabled: "true"
+  feature-dagster-enabled: "true"
+  feature-vector-search-enabled: "true"

@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "open-forge.configMapName" . }}
+  labels:
+    {{- include "open-forge.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  # Logging
+  log-level: {{ .Values.config.logLevel | quote }}
+
+  # API Configuration
+  api-url: {{ .Values.config.apiUrl | quote }}
+  websocket-url: {{ .Values.config.websocketUrl | quote }}
+  cors-origins: {{ .Values.config.corsOrigins | quote }}
+
+  # Internal Service URLs
+  langflow-url: "http://{{ include "open-forge.fullname" . }}-langflow"
+  {{- if .Values.langflow.ingress.enabled }}
+  {{- with (first .Values.langflow.ingress.hosts) }}
+  langflow-public-url: "https://{{ .host }}"
+  {{- end }}
+  {{- else }}
+  langflow-public-url: "http://{{ include "open-forge.fullname" . }}-langflow"
+  {{- end }}
+  dagster-url: "http://{{ include "open-forge.fullname" . }}-dagster-webserver"
+
+  # NextAuth Configuration
+  {{- if .Values.ui.ingress.enabled }}
+  {{- with (first .Values.ui.ingress.hosts) }}
+  nextauth-url: "https://{{ .host }}"
+  {{- end }}
+  {{- else }}
+  nextauth-url: {{ .Values.config.apiUrl | quote }}
+  {{- end }}
+
+  # Database Configuration (non-sensitive)
+  postgres-host: {{ include "open-forge.postgresql.host" . | quote }}
+  postgres-port: "5432"
+  postgres-db: {{ .Values.postgresql.auth.database | default "openforge" | quote }}
+
+  # Redis Configuration
+  redis-host: {{ include "open-forge.redis.host" . | quote }}
+  redis-port: "6379"
+
+  # MinIO Configuration
+  minio-endpoint: "{{ include "open-forge.minio.host" . }}:9000"
+  minio-region: "us-east-1"
+  minio-use-ssl: "false"
+
+  # Feature Flags
+  feature-langflow-enabled: {{ .Values.config.features.langflowEnabled | quote }}
+  feature-dagster-enabled: {{ .Values.config.features.dagsterEnabled | quote }}
+  feature-vector-search-enabled: {{ .Values.config.features.vectorSearchEnabled | quote }}

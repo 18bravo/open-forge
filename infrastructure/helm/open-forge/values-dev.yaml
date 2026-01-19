@@ -1,0 +1,160 @@
+# Development environment values for open-forge
+# Override defaults with development-specific configuration
+
+# API Configuration
+api:
+  replicaCount: 1
+
+  ingress:
+    hosts:
+      - host: api.dev.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-api-dev-tls
+        hosts:
+          - api.dev.open-forge.io
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+  autoscaling:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+  env:
+    LOG_LEVEL: DEBUG
+
+# UI Configuration
+ui:
+  replicaCount: 1
+
+  ingress:
+    hosts:
+      - host: dev.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-ui-dev-tls
+        hosts:
+          - dev.open-forge.io
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+# Dagster Configuration
+dagster:
+  webserver:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+  daemon:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+  config:
+    maxConcurrentRuns: 3
+
+# Langflow Configuration
+langflow:
+  replicaCount: 1
+
+  ingress:
+    hosts:
+      - host: langflow.dev.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: langflow-dev-tls
+        hosts:
+          - langflow.dev.open-forge.io
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  persistence:
+    size: 5Gi
+
+# Database Configuration
+postgresql:
+  primary:
+    persistence:
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+redis:
+  master:
+    persistence:
+      size: 2Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+
+minio:
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# ConfigMap Configuration
+config:
+  logLevel: DEBUG
+  apiUrl: https://api.dev.open-forge.io
+  websocketUrl: wss://api.dev.open-forge.io/ws
+  corsOrigins: "https://dev.open-forge.io"
+
+# Disable monitoring in dev
+monitoring:
+  enabled: false

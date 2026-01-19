@@ -1,0 +1,174 @@
+# Open Forge Namespace Definitions
+# These namespaces provide isolation for different environments
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-dev
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: development
+  annotations:
+    description: "Development environment for Open Forge"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-staging
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: staging
+  annotations:
+    description: "Staging environment for Open Forge"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge-prod
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge
+    environment: production
+  annotations:
+    description: "Production environment for Open Forge"
+---
+# Resource quotas for development namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-resource-quota
+  namespace: open-forge-dev
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    persistentvolumeclaims: "10"
+    pods: "50"
+---
+# Resource quotas for staging namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-resource-quota
+  namespace: open-forge-staging
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+    persistentvolumeclaims: "20"
+    pods: "100"
+---
+# Resource quotas for production namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-resource-quota
+  namespace: open-forge-prod
+spec:
+  hard:
+    requests.cpu: "64"
+    requests.memory: 128Gi
+    limits.cpu: "128"
+    limits.memory: 256Gi
+    persistentvolumeclaims: "50"
+    pods: "200"
+---
+# Network policy for dev namespace - allow all internal traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: open-forge-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+---
+# Network policy for staging namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: open-forge-staging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+---
+# Network policy for production namespace - more restrictive
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: open-forge-prod
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-open-forge-internal
+  namespace: open-forge-prod
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: open-forge
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              environment: production
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/name: open-forge
+              environment: production
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16

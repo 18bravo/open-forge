@@ -1,0 +1,300 @@
+# Open Forge Dagster Deployment
+# Dagster webserver and daemon for orchestration
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dagster-webserver
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-forge
+        app.kubernetes.io/component: dagster-webserver
+        app.kubernetes.io/part-of: open-forge
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+    spec:
+      serviceAccountName: dagster
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: webserver
+          image: ghcr.io/18bravo/open-forge-dagster:latest
+          imagePullPolicy: Always
+          command: ["dagster-webserver"]
+          args:
+            - "-h"
+            - "0.0.0.0"
+            - "-p"
+            - "3000"
+            - "-w"
+            - "/opt/dagster/workspace.yaml"
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          env:
+            - name: DAGSTER_HOME
+              value: /opt/dagster/dagster_home
+            - name: DAGSTER_POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-host
+            - name: DAGSTER_POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-port
+            - name: DAGSTER_POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-db
+            - name: DAGSTER_POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: dagster-secrets
+                  key: postgres-user
+            - name: DAGSTER_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dagster-secrets
+                  key: postgres-password
+          livenessProbe:
+            httpGet:
+              path: /server_info
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /server_info
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: dagster-home
+              mountPath: /opt/dagster/dagster_home
+            - name: dagster-config
+              mountPath: /opt/dagster/dagster.yaml
+              subPath: dagster.yaml
+            - name: dagster-workspace
+              mountPath: /opt/dagster/workspace.yaml
+              subPath: workspace.yaml
+      volumes:
+        - name: dagster-home
+          emptyDir: {}
+        - name: dagster-config
+          configMap:
+            name: dagster-config
+        - name: dagster-workspace
+          configMap:
+            name: dagster-config
+      terminationGracePeriodSeconds: 30
+---
+# Dagster Daemon Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dagster-daemon
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-daemon
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-daemon
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-forge
+        app.kubernetes.io/component: dagster-daemon
+        app.kubernetes.io/part-of: open-forge
+    spec:
+      serviceAccountName: dagster
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: daemon
+          image: ghcr.io/18bravo/open-forge-dagster:latest
+          imagePullPolicy: Always
+          command: ["dagster-daemon"]
+          args: ["run"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          env:
+            - name: DAGSTER_HOME
+              value: /opt/dagster/dagster_home
+            - name: DAGSTER_POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-host
+            - name: DAGSTER_POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-port
+            - name: DAGSTER_POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: dagster-config
+                  key: postgres-db
+            - name: DAGSTER_POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: dagster-secrets
+                  key: postgres-user
+            - name: DAGSTER_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dagster-secrets
+                  key: postgres-password
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "dagster-daemon health-check"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: dagster-home
+              mountPath: /opt/dagster/dagster_home
+            - name: dagster-config
+              mountPath: /opt/dagster/dagster.yaml
+              subPath: dagster.yaml
+            - name: dagster-workspace
+              mountPath: /opt/dagster/workspace.yaml
+              subPath: workspace.yaml
+      volumes:
+        - name: dagster-home
+          emptyDir: {}
+        - name: dagster-config
+          configMap:
+            name: dagster-config
+        - name: dagster-workspace
+          configMap:
+            name: dagster-config
+      terminationGracePeriodSeconds: 60
+---
+# Service Account for Dagster
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dagster
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+---
+# ClusterRole for Dagster (needed for K8s run launcher)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dagster-role
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+---
+# RoleBinding for Dagster
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dagster-role-binding
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+subjects:
+  - kind: ServiceAccount
+    name: dagster
+roleRef:
+  kind: Role
+  name: dagster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# PodDisruptionBudget for Dagster Webserver
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dagster-webserver-pdb
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: dagster-webserver

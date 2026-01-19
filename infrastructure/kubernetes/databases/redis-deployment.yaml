@@ -1,0 +1,237 @@
+# Open Forge Redis Deployment
+# Redis for caching and message queuing
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/version: "7"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-forge
+        app.kubernetes.io/component: redis
+        app.kubernetes.io/part-of: open-forge
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+    spec:
+      serviceAccountName: redis
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - redis-server
+          args:
+            - /etc/redis/redis.conf
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+            - name: tmp
+              mountPath: /tmp
+        # Redis Exporter sidecar for metrics
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.55.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 9121
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          env:
+            - name: REDIS_ADDR
+              value: "localhost:6379"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-data
+        - name: config
+          configMap:
+            name: redis-config
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30
+---
+# Service Account for Redis
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: open-forge
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+    - name: metrics
+      port: 9121
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+---
+# Redis PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Redis ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+data:
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # General
+    daemonize no
+    supervised no
+    pidfile /tmp/redis.pid
+    loglevel notice
+    databases 16
+    always-show-logo no
+
+    # Snapshotting
+    save 900 1
+    save 300 10
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+
+    # Memory management
+    maxmemory 768mb
+    maxmemory-policy allkeys-lru
+
+    # Append only mode
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+
+    # Slow log
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+
+    # Latency monitor
+    latency-monitor-threshold 0
+
+    # Event notification
+    notify-keyspace-events ""
+---
+# PodDisruptionBudget for Redis
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: redis
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: redis

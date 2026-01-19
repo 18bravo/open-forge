@@ -1,0 +1,73 @@
+# Kustomize base configuration for Open Forge
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: open-forge-base
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: open-forge
+  app.kubernetes.io/part-of: open-forge
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  app.kubernetes.io/version: "1.0.0"
+
+# Resources to include
+resources:
+  # Namespaces
+  - ../../../kubernetes/namespaces.yaml
+
+  # API
+  - ../../../kubernetes/api/deployment.yaml
+  - ../../../kubernetes/api/service.yaml
+  - ../../../kubernetes/api/ingress.yaml
+
+  # UI
+  - ../../../kubernetes/ui/deployment.yaml
+  - ../../../kubernetes/ui/service.yaml
+  - ../../../kubernetes/ui/ingress.yaml
+
+  # Dagster
+  - ../../../kubernetes/dagster/deployment.yaml
+  - ../../../kubernetes/dagster/service.yaml
+  - ../../../kubernetes/dagster/configmap.yaml
+
+  # Langflow
+  - ../../../kubernetes/langflow/deployment.yaml
+  - ../../../kubernetes/langflow/service.yaml
+
+  # Databases
+  - ../../../kubernetes/databases/postgres-statefulset.yaml
+  - ../../../kubernetes/databases/redis-deployment.yaml
+  - ../../../kubernetes/databases/minio-statefulset.yaml
+
+  # Shared Configuration
+  - ../../../kubernetes/configmap.yaml
+  - ../../../kubernetes/secrets.yaml
+
+# ConfigMap generator
+configMapGenerator:
+  - name: open-forge-kustomize-config
+    literals:
+      - ENVIRONMENT=base
+      - LOG_LEVEL=INFO
+
+# Image customization (can be overridden in overlays)
+images:
+  - name: ghcr.io/18bravo/open-forge-api
+    newTag: latest
+  - name: ghcr.io/18bravo/open-forge-ui
+    newTag: latest
+  - name: ghcr.io/18bravo/open-forge-dagster
+    newTag: latest
+  - name: langflowai/langflow
+    newTag: latest
+  - name: pgvector/pgvector
+    newTag: pg16
+  - name: redis
+    newTag: 7-alpine
+  - name: minio/minio
+    newTag: RELEASE.2024-01-01T16-36-33Z

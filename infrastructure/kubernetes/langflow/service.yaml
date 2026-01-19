@@ -1,0 +1,21 @@
+# Open Forge Langflow Service
+# ClusterIP service for Langflow
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langflow
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+    app.kubernetes.io/part-of: open-forge
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow

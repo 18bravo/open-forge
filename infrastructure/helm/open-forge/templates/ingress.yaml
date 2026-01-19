@@ -1,0 +1,187 @@
+{{- if .Values.api.enabled }}
+{{- if .Values.api.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "open-forge.fullname" . }}-api
+  labels:
+    {{- include "open-forge.api.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.api.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.api.ingress.className }}
+  ingressClassName: {{ .Values.api.ingress.className }}
+  {{- end }}
+  {{- if .Values.api.ingress.tls }}
+  tls:
+    {{- range .Values.api.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.api.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "open-forge.fullname" $ }}-api
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+---
+{{- if .Values.ui.enabled }}
+{{- if .Values.ui.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "open-forge.fullname" . }}-ui
+  labels:
+    {{- include "open-forge.ui.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ui.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ui.ingress.className }}
+  ingressClassName: {{ .Values.ui.ingress.className }}
+  {{- end }}
+  {{- if .Values.ui.ingress.tls }}
+  tls:
+    {{- range .Values.ui.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ui.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "open-forge.fullname" $ }}-ui
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+---
+{{- if .Values.langflow.enabled }}
+{{- if .Values.langflow.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "open-forge.fullname" . }}-langflow
+  labels:
+    {{- include "open-forge.langflow.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.langflow.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.langflow.ingress.className }}
+  ingressClassName: {{ .Values.langflow.ingress.className }}
+  {{- end }}
+  {{- if .Values.langflow.ingress.tls }}
+  tls:
+    {{- range .Values.langflow.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.langflow.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "open-forge.fullname" $ }}-langflow
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+---
+{{- if .Values.dagster.enabled }}
+{{- if .Values.dagster.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "open-forge.fullname" . }}-dagster
+  labels:
+    {{- include "open-forge.dagster.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.dagster.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.dagster.ingress.className }}
+  ingressClassName: {{ .Values.dagster.ingress.className }}
+  {{- end }}
+  {{- if .Values.dagster.ingress.tls }}
+  tls:
+    {{- range .Values.dagster.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.dagster.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "open-forge.fullname" $ }}-dagster-webserver
+                port:
+                  name: http
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

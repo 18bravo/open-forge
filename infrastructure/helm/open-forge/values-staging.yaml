@@ -1,0 +1,160 @@
+# Staging environment values for open-forge
+# Configuration that mirrors production but with reduced resources
+
+# API Configuration
+api:
+  replicaCount: 2
+
+  ingress:
+    hosts:
+      - host: api.staging.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-api-staging-tls
+        hosts:
+          - api.staging.open-forge.io
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 750m
+      memory: 1536Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+  env:
+    LOG_LEVEL: INFO
+
+# UI Configuration
+ui:
+  replicaCount: 2
+
+  ingress:
+    hosts:
+      - host: staging.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-ui-staging-tls
+        hosts:
+          - staging.open-forge.io
+
+  resources:
+    requests:
+      cpu: 75m
+      memory: 192Mi
+    limits:
+      cpu: 375m
+      memory: 768Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+
+# Dagster Configuration
+dagster:
+  webserver:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 384Mi
+      limits:
+        cpu: 750m
+        memory: 1536Mi
+
+  daemon:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 384Mi
+      limits:
+        cpu: 750m
+        memory: 1536Mi
+
+  config:
+    maxConcurrentRuns: 5
+
+# Langflow Configuration
+langflow:
+  replicaCount: 1
+
+  ingress:
+    hosts:
+      - host: langflow.staging.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: langflow-staging-tls
+        hosts:
+          - langflow.staging.open-forge.io
+
+  resources:
+    requests:
+      cpu: 375m
+      memory: 768Mi
+    limits:
+      cpu: 1500m
+      memory: 3Gi
+
+  persistence:
+    size: 8Gi
+
+# Database Configuration
+postgresql:
+  primary:
+    persistence:
+      size: 25Gi
+    resources:
+      requests:
+        cpu: 375m
+        memory: 768Mi
+      limits:
+        cpu: 1500m
+        memory: 3Gi
+
+redis:
+  master:
+    persistence:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 75m
+        memory: 192Mi
+      limits:
+        cpu: 375m
+        memory: 768Mi
+
+minio:
+  persistence:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 750m
+      memory: 1536Mi
+
+# ConfigMap Configuration
+config:
+  logLevel: INFO
+  apiUrl: https://api.staging.open-forge.io
+  websocketUrl: wss://api.staging.open-forge.io/ws
+  corsOrigins: "https://staging.open-forge.io"
+
+# Enable monitoring in staging
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true

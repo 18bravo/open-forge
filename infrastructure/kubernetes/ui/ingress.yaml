@@ -1,0 +1,77 @@
+# Open Forge UI Ingress
+# Ingress configuration with TLS termination for frontend
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: open-forge-ui
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Cache static assets
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+    # Security headers
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - open-forge.io
+        - www.open-forge.io
+      secretName: open-forge-ui-tls
+  rules:
+    - host: open-forge.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: open-forge-ui
+                port:
+                  name: http
+    - host: www.open-forge.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: open-forge-ui
+                port:
+                  name: http
+---
+# Certificate for TLS (if using cert-manager)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: open-forge-ui-cert
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: ui
+spec:
+  secretName: open-forge-ui-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: open-forge.io
+  dnsNames:
+    - open-forge.io
+    - www.open-forge.io

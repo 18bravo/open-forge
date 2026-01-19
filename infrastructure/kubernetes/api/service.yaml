@@ -1,0 +1,45 @@
+# Open Forge API Service
+# ClusterIP service for internal cluster communication
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-forge-api
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+---
+# Headless service for direct pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-forge-api-headless
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: open-forge
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: api

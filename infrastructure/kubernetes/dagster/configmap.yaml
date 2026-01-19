@@ -1,0 +1,134 @@
+# Open Forge Dagster ConfigMap
+# Configuration for Dagster webserver, daemon, and run coordinator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dagster-config
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+    app.kubernetes.io/part-of: open-forge
+data:
+  postgres-host: "postgres"
+  postgres-port: "5432"
+  postgres-db: "dagster"
+
+  # Dagster instance configuration
+  dagster.yaml: |
+    scheduler:
+      module: dagster.core.scheduler
+      class: DagsterDaemonScheduler
+
+    run_coordinator:
+      module: dagster.core.run_coordinator
+      class: QueuedRunCoordinator
+      config:
+        max_concurrent_runs: 10
+        tag_concurrency_limits:
+          - key: "dagster/priority"
+            value: "low"
+            limit: 2
+
+    run_launcher:
+      module: dagster_k8s
+      class: K8sRunLauncher
+      config:
+        service_account_name: dagster
+        job_namespace:
+          env: DAGSTER_K8S_JOB_NAMESPACE
+        load_incluster_config: true
+        job_image:
+          env: DAGSTER_K8S_JOB_IMAGE
+        dagster_home: /opt/dagster/dagster_home
+        instance_config_map: dagster-config
+        postgres_password_secret: dagster-secrets
+        env_config_maps:
+          - dagster-config
+        env_secrets:
+          - dagster-secrets
+
+    run_storage:
+      module: dagster_postgres.run_storage
+      class: PostgresRunStorage
+      config:
+        postgres_db:
+          hostname:
+            env: DAGSTER_POSTGRES_HOST
+          port:
+            env: DAGSTER_POSTGRES_PORT
+          username:
+            env: DAGSTER_POSTGRES_USER
+          password:
+            env: DAGSTER_POSTGRES_PASSWORD
+          db_name:
+            env: DAGSTER_POSTGRES_DB
+
+    event_log_storage:
+      module: dagster_postgres.event_log
+      class: PostgresEventLogStorage
+      config:
+        postgres_db:
+          hostname:
+            env: DAGSTER_POSTGRES_HOST
+          port:
+            env: DAGSTER_POSTGRES_PORT
+          username:
+            env: DAGSTER_POSTGRES_USER
+          password:
+            env: DAGSTER_POSTGRES_PASSWORD
+          db_name:
+            env: DAGSTER_POSTGRES_DB
+
+    schedule_storage:
+      module: dagster_postgres.schedule_storage
+      class: PostgresScheduleStorage
+      config:
+        postgres_db:
+          hostname:
+            env: DAGSTER_POSTGRES_HOST
+          port:
+            env: DAGSTER_POSTGRES_PORT
+          username:
+            env: DAGSTER_POSTGRES_USER
+          password:
+            env: DAGSTER_POSTGRES_PASSWORD
+          db_name:
+            env: DAGSTER_POSTGRES_DB
+
+    compute_logs:
+      module: dagster_aws.s3.compute_log_manager
+      class: S3ComputeLogManager
+      config:
+        bucket: open-forge-dagster-logs
+        prefix: dagster-logs
+        local_dir: /opt/dagster/dagster_home/compute_logs
+        skip_empty_files: true
+
+    telemetry:
+      enabled: false
+
+  # Workspace configuration
+  workspace.yaml: |
+    load_from:
+      - grpc_server:
+          host: dagster-grpc
+          port: 4000
+          location_name: open_forge_pipelines
+---
+# Dagster Secrets (template - should use external-secrets in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dagster-secrets
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster
+    app.kubernetes.io/part-of: open-forge
+  annotations:
+    # External Secrets Operator annotation
+    external-secrets.io/managed: "true"
+type: Opaque
+stringData:
+  postgres-user: dagster
+  postgres-password: CHANGE_ME_IN_PRODUCTION

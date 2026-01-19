@@ -1,0 +1,9 @@
+# Base namespace configuration
+# This can be patched by overlays to target different namespaces
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-forge
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/part-of: open-forge

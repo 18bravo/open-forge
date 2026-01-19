@@ -1,0 +1,239 @@
+# Production environment values for open-forge
+# High availability configuration with full resources
+
+# API Configuration
+api:
+  replicaCount: 3
+
+  image:
+    pullPolicy: IfNotPresent
+
+  ingress:
+    hosts:
+      - host: api.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-api-tls
+        hosts:
+          - api.open-forge.io
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: api
+          topologyKey: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: api
+            topologyKey: topology.kubernetes.io/zone
+
+  env:
+    LOG_LEVEL: WARNING
+
+# UI Configuration
+ui:
+  replicaCount: 3
+
+  image:
+    pullPolicy: IfNotPresent
+
+  ingress:
+    hosts:
+      - host: open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: www.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: open-forge-ui-tls
+        hosts:
+          - open-forge.io
+          - www.open-forge.io
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: ui
+          topologyKey: kubernetes.io/hostname
+
+# Dagster Configuration
+dagster:
+  webserver:
+    replicaCount: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  daemon:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  config:
+    maxConcurrentRuns: 20
+
+# Langflow Configuration
+langflow:
+  replicaCount: 2
+
+  ingress:
+    hosts:
+      - host: langflow.open-forge.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: langflow-tls
+        hosts:
+          - langflow.open-forge.io
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  persistence:
+    size: 50Gi
+
+  config:
+    workers: 8
+
+# Database Configuration
+postgresql:
+  primary:
+    persistence:
+      size: 200Gi
+      storageClass: fast-ssd
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    extendedConfiguration: |
+      max_connections = 500
+      shared_buffers = 4GB
+      effective_cache_size = 12GB
+      maintenance_work_mem = 1GB
+      work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 64MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+
+redis:
+  architecture: replication
+  replica:
+    replicaCount: 2
+  master:
+    persistence:
+      size: 20Gi
+      storageClass: fast-ssd
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+minio:
+  mode: distributed
+  statefulset:
+    replicaCount: 4
+  persistence:
+    size: 500Gi
+    storageClass: fast-ssd
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# Secrets Configuration - Use External Secrets in production
+secrets:
+  externalSecrets:
+    enabled: true
+    secretStoreRef:
+      kind: ClusterSecretStore
+      name: vault-backend
+    refreshInterval: 30m
+
+# ConfigMap Configuration
+config:
+  logLevel: WARNING
+  apiUrl: https://api.open-forge.io
+  websocketUrl: wss://api.open-forge.io/ws
+  corsOrigins: "https://open-forge.io,https://www.open-forge.io"
+
+# Enable full monitoring in production
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    labels:
+      release: prometheus

@@ -1,0 +1,235 @@
+# Open Forge Langflow Deployment
+# Langflow visual AI workflow builder
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langflow
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+    app.kubernetes.io/part-of: open-forge
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: langflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-forge
+        app.kubernetes.io/component: langflow
+        app.kubernetes.io/part-of: open-forge
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "7860"
+    spec:
+      serviceAccountName: langflow
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: open-forge
+                    app.kubernetes.io/component: langflow
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: langflow
+          image: langflowai/langflow:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 7860
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          env:
+            - name: LANGFLOW_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: langflow-secrets
+                  key: database-url
+            - name: LANGFLOW_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: langflow-secrets
+                  key: secret-key
+            - name: LANGFLOW_SUPERUSER
+              valueFrom:
+                secretKeyRef:
+                  name: langflow-secrets
+                  key: superuser
+            - name: LANGFLOW_SUPERUSER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: langflow-secrets
+                  key: superuser-password
+            - name: LANGFLOW_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: langflow-config
+                  key: workers
+            - name: LANGFLOW_CACHE_TYPE
+              value: redis
+            - name: LANGFLOW_REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: langflow-config
+                  key: redis-host
+            - name: LANGFLOW_REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: langflow-config
+                  key: redis-port
+            - name: LANGFLOW_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: langflow-config
+                  key: log-level
+            - name: LANGFLOW_AUTO_LOGIN
+              value: "false"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: open-forge-secrets
+                  key: openai-api-key
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: open-forge-secrets
+                  key: anthropic-api-key
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          volumeMounts:
+            - name: langflow-data
+              mountPath: /app/langflow
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: langflow-data
+          persistentVolumeClaim:
+            claimName: langflow-data
+        - name: tmp
+          emptyDir: {}
+      terminationGracePeriodSeconds: 30
+---
+# Service Account for Langflow
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: langflow
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+---
+# PersistentVolumeClaim for Langflow data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: langflow-data
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+---
+# ConfigMap for Langflow
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: langflow-config
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+data:
+  workers: "4"
+  redis-host: "redis"
+  redis-port: "6379"
+  log-level: "INFO"
+---
+# Langflow Secrets (template - should use external-secrets in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: langflow-secrets
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+  annotations:
+    external-secrets.io/managed: "true"
+type: Opaque
+stringData:
+  database-url: postgresql://langflow:CHANGE_ME@postgres:5432/langflow
+  secret-key: CHANGE_ME_IN_PRODUCTION
+  superuser: admin
+  superuser-password: CHANGE_ME_IN_PRODUCTION
+---
+# PodDisruptionBudget for Langflow
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: langflow-pdb
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: langflow
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-forge
+      app.kubernetes.io/component: langflow

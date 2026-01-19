@@ -1,0 +1,207 @@
+# Kustomize staging overlay for Open Forge
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: open-forge-staging
+
+# Reference base configuration
+resources:
+  - ../../base
+
+# Target staging namespace
+namespace: open-forge-staging
+
+# Staging-specific labels
+commonLabels:
+  environment: staging
+
+# Staging annotations
+commonAnnotations:
+  app.kubernetes.io/environment: staging
+
+# Replicas for staging (moderate)
+replicas:
+  - name: open-forge-api
+    count: 2
+  - name: open-forge-ui
+    count: 2
+  - name: dagster-webserver
+    count: 1
+  - name: langflow
+    count: 1
+
+# Staging images (use specific versions)
+images:
+  - name: ghcr.io/18bravo/open-forge-api
+    newTag: staging
+  - name: ghcr.io/18bravo/open-forge-ui
+    newTag: staging
+  - name: ghcr.io/18bravo/open-forge-dagster
+    newTag: staging
+
+# ConfigMap customization for staging
+configMapGenerator:
+  - name: open-forge-kustomize-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=INFO
+
+# Patches for staging environment
+patches:
+  # Moderate API resources for staging
+  - target:
+      kind: Deployment
+      name: open-forge-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 200m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 384Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 750m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 1536Mi
+
+  # Moderate UI resources for staging
+  - target:
+      kind: Deployment
+      name: open-forge-ui
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 75m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 192Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 375m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 768Mi
+
+  # Moderate Dagster resources for staging
+  - target:
+      kind: Deployment
+      name: dagster-webserver
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 200m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 384Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 750m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 1536Mi
+
+  # Moderate Langflow resources for staging
+  - target:
+      kind: Deployment
+      name: langflow
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 375m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 768Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 1500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 3Gi
+
+  # Moderate PostgreSQL storage for staging
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 25Gi
+
+  # Moderate Redis storage for staging
+  - target:
+      kind: PersistentVolumeClaim
+      name: redis-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 5Gi
+
+  # Moderate MinIO storage for staging
+  - target:
+      kind: StatefulSet
+      name: minio
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 50Gi
+
+  # Update API ingress for staging
+  - target:
+      kind: Ingress
+      name: open-forge-api
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.staging.open-forge.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.staging.open-forge.io
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: open-forge-api-staging-tls
+
+  # Update UI ingress for staging
+  - target:
+      kind: Ingress
+      name: open-forge-ui
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: staging.open-forge.io
+      - op: remove
+        path: /spec/rules/1
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: staging.open-forge.io
+      - op: remove
+        path: /spec/tls/0/hosts/1
+      - op: replace
+        path: /spec/tls/0/secretName
+        value: open-forge-ui-staging-tls
+
+  # Update HPA settings for staging
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: open-forge-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 5
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: open-forge-ui-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4

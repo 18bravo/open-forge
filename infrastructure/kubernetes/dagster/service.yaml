@@ -1,0 +1,41 @@
+# Open Forge Dagster Service
+# ClusterIP service for Dagster webserver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dagster-webserver
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+    app.kubernetes.io/part-of: open-forge
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-webserver
+---
+# Internal gRPC service for code locations
+apiVersion: v1
+kind: Service
+metadata:
+  name: dagster-grpc
+  labels:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-grpc
+    app.kubernetes.io/part-of: open-forge
+spec:
+  type: ClusterIP
+  ports:
+    - name: grpc
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: open-forge
+    app.kubernetes.io/component: dagster-code-location

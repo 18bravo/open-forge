@@ -1,0 +1,68 @@
+apiVersion: v2
+name: open-forge
+description: A Helm chart for deploying the Open Forge AI integration platform
+
+# Chart type: application or library
+type: application
+
+# Chart version - increment for each change
+version: 0.1.0
+
+# Application version
+appVersion: "1.0.0"
+
+# Minimum Kubernetes version
+kubeVersion: ">=1.25.0"
+
+# Chart maintainers
+maintainers:
+  - name: Open Forge Team
+    email: team@open-forge.io
+
+# Chart home page
+home: https://open-forge.io
+
+# Chart sources
+sources:
+  - https://github.com/18bravo/open-forge
+
+# Keywords for search
+keywords:
+  - ai
+  - ml
+  - langflow
+  - dagster
+  - orchestration
+  - data-pipeline
+
+# Chart dependencies
+dependencies:
+  # PostgreSQL with pgvector support
+  - name: postgresql
+    version: "14.0.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+    alias: postgresql
+
+  # Redis for caching
+  - name: redis
+    version: "18.0.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+    alias: redis
+
+  # MinIO for object storage
+  - name: minio
+    version: "12.0.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: minio.enabled
+    alias: minio
+
+# Annotations for artifacthub.io
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial release
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/license: MIT
+  artifacthub.io/prerelease: "true"

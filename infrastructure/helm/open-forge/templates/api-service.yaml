@@ -1,0 +1,41 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "open-forge.fullname" . }}-api
+  labels:
+    {{- include "open-forge.api.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.api.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: {{ .Values.api.service.targetPort }}
+      protocol: TCP
+  selector:
+    {{- include "open-forge.api.selectorLabels" . | nindent 4 }}
+---
+# Headless service for direct pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "open-forge.fullname" . }}-api-headless
+  labels:
+    {{- include "open-forge.api.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    {{- include "open-forge.api.selectorLabels" . | nindent 4 }}
+{{- end }}

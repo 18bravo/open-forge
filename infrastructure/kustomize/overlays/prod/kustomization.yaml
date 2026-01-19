@@ -1,0 +1,254 @@
+# Kustomize production overlay for Open Forge
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: open-forge-prod
+
+# Reference base configuration
+resources:
+  - ../../base
+
+# Target production namespace
+namespace: open-forge-prod
+
+# Production-specific labels
+commonLabels:
+  environment: production
+
+# Production annotations
+commonAnnotations:
+  app.kubernetes.io/environment: production
+
+# Replicas for production (high availability)
+replicas:
+  - name: open-forge-api
+    count: 3
+  - name: open-forge-ui
+    count: 3
+  - name: dagster-webserver
+    count: 2
+  - name: langflow
+    count: 2
+
+# Production images (use specific semantic versions)
+images:
+  - name: ghcr.io/18bravo/open-forge-api
+    newTag: v1.0.0
+  - name: ghcr.io/18bravo/open-forge-ui
+    newTag: v1.0.0
+  - name: ghcr.io/18bravo/open-forge-dagster
+    newTag: v1.0.0
+
+# ConfigMap customization for production
+configMapGenerator:
+  - name: open-forge-kustomize-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=WARNING
+
+# Patches for production environment
+patches:
+  # Full API resources for production
+  - target:
+      kind: Deployment
+      name: open-forge-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 1Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 4Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/template/spec/affinity/podAntiAffinity/requiredDuringSchedulingIgnoredDuringExecution
+        value:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: api
+            topologyKey: kubernetes.io/hostname
+
+  # Full UI resources for production
+  - target:
+      kind: Deployment
+      name: open-forge-ui
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 200m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+
+  # Full Dagster resources for production
+  - target:
+      kind: Deployment
+      name: dagster-webserver
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 1Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 4Gi
+
+  # Full Langflow resources for production
+  - target:
+      kind: Deployment
+      name: langflow
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 4000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 8Gi
+
+  # Production PostgreSQL configuration
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 200Gi
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: fast-ssd
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 4000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 8Gi
+
+  # Production Redis configuration
+  - target:
+      kind: PersistentVolumeClaim
+      name: redis-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 20Gi
+      - op: replace
+        path: /spec/storageClassName
+        value: fast-ssd
+
+  # Production MinIO configuration
+  - target:
+      kind: StatefulSet
+      name: minio
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 500Gi
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: fast-ssd
+
+  # Production API ingress (default hosts)
+  - target:
+      kind: Ingress
+      name: open-forge-api
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.open-forge.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: api.open-forge.io
+
+  # Production UI ingress (default hosts)
+  - target:
+      kind: Ingress
+      name: open-forge-ui
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: open-forge.io
+      - op: replace
+        path: /spec/rules/1/host
+        value: www.open-forge.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: open-forge.io
+      - op: replace
+        path: /spec/tls/0/hosts/1
+        value: www.open-forge.io
+
+  # Production HPA settings
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: open-forge-api-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: open-forge-ui-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 15
+
+  # Production PDB settings
+  - target:
+      kind: PodDisruptionBudget
+      name: open-forge-api-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+
+  - target:
+      kind: PodDisruptionBudget
+      name: open-forge-ui-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2

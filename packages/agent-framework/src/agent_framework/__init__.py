@@ -17,6 +17,10 @@ from agent_framework.graph_builder import WorkflowBuilder, create_approval_subgr
 from agent_framework.memory import RedisMemorySaver, ConversationMemory, EngagementContext
 from agent_framework.prompts import PromptTemplate, PromptLibrary
 
+# New LangGraph memory system (WP3: Long-term memory migration)
+from agent_framework.memory.long_term import EngagementMemoryStore, MemoryTypes
+from agent_framework.agents.base_memory_agent import MemoryAwareAgent, SimpleMemoryAwareAgent
+
 __all__ = [
     # Base classes
     "BaseOpenForgeAgent",
@@ -32,10 +36,16 @@ __all__ = [
     # Graph building
     "WorkflowBuilder",
     "create_approval_subgraph",
-    # Memory
+    # Memory (legacy)
     "RedisMemorySaver",
     "ConversationMemory",
     "EngagementContext",
+    # Memory (LangGraph - new)
+    "EngagementMemoryStore",
+    "MemoryTypes",
+    # Agents (LangGraph - new)
+    "MemoryAwareAgent",
+    "SimpleMemoryAwareAgent",
     # Prompts
     "PromptTemplate",
     "PromptLibrary",

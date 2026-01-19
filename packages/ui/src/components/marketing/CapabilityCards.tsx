@@ -1,15 +1,25 @@
 'use client';
 
 import { Suspense } from 'react';
+import { useReducedMotion } from '@/lib/hooks';
 import { CanvasWrapper, OntologyAnimation, AgentSwarmAnimation, CodeLoopAnimation, TimelineAnimation } from './three';
 
 interface CapabilityCardProps {
   title: string;
   description: string;
   animation: 'ontology' | 'swarm' | 'codeloop' | 'timeline';
+  reducedMotion?: boolean;
 }
 
-function CapabilityCard({ title, description, animation }: CapabilityCardProps) {
+// Static icon fallbacks for reduced motion users
+const staticIcons: Record<string, string> = {
+  ontology: '🔗',
+  swarm: '🤖',
+  codeloop: '⚡',
+  timeline: '🚀',
+};
+
+function CapabilityCard({ title, description, animation, reducedMotion = false }: CapabilityCardProps) {
   const AnimationComponent = {
     ontology: OntologyAnimation,
     swarm: AgentSwarmAnimation,
@@ -19,14 +29,20 @@ function CapabilityCard({ title, description, animation }: CapabilityCardProps) 
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-violet-500/50 hover:bg-zinc-900">
-      {/* Three.js Background */}
-      <div className="absolute inset-0 opacity-30 group-hover:opacity-50 transition-opacity">
-        <Suspense fallback={null}>
-          <CanvasWrapper className="h-full w-full">
-            <AnimationComponent />
-          </CanvasWrapper>
-        </Suspense>
-      </div>
+      {/* Three.js Background or Static Fallback */}
+      {reducedMotion ? (
+        <div className="absolute inset-0 flex items-center justify-center opacity-20">
+          <span className="text-8xl" aria-hidden="true">{staticIcons[animation]}</span>
+        </div>
+      ) : (
+        <div className="absolute inset-0 opacity-30 group-hover:opacity-50 transition-opacity">
+          <Suspense fallback={null}>
+            <CanvasWrapper className="h-full w-full">
+              <AnimationComponent />
+            </CanvasWrapper>
+          </Suspense>
+        </div>
+      )}
 
       {/* Content */}
       <div className="relative z-10">
@@ -65,6 +81,8 @@ const capabilities: CapabilityCardProps[] = [
 ];
 
 export function CapabilityCards() {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <section className="relative py-24" id="features">
       <div className="mx-auto max-w-6xl px-6">
@@ -84,7 +102,11 @@ export function CapabilityCards() {
         {/* Cards grid */}
         <div className="grid gap-6 md:grid-cols-2">
           {capabilities.map((capability) => (
-            <CapabilityCard key={capability.title} {...capability} />
+            <CapabilityCard
+              key={capability.title}
+              {...capability}
+              reducedMotion={prefersReducedMotion}
+            />
           ))}
         </div>
       </div>

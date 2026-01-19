@@ -10,12 +10,13 @@
 
 | Category | Critical | High | Medium | Low |
 |----------|----------|------|--------|-----|
-| Security | 4 | 5 | 4 | 3 |
+| Security | 4 | 7 | 5 | 4 |
 | Bugs | 0 | 0 | 0 | 0 |
 | Performance | 0 | 0 | 0 | 0 |
 | Code Quality | 0 | 0 | 0 | 0 |
 | Testing | 0 | 0 | 0 | 0 |
 | Documentation | 0 | 0 | 0 | 0 |
+| Dependencies | 1 | 1 | 2 | 1 |
 
 ---
 
@@ -187,10 +188,134 @@ Several schema fields lack max_length constraints:
 While Pydantic provides type safety, unbounded strings could be used for DoS attacks with extremely large payloads.
 
 ### Secrets Management
-_Pending review._
+
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | High | Hardcoded development passwords in Python code | `definitions.py:164,172` | Move credentials to environment variables; use External Secrets Operator references |
+| 2 | High | Development passwords in .env.example | `.env.example:16,32,68` | Use placeholder values only (e.g., `<your-password-here>`); never commit real passwords |
+| 3 | Medium | Placeholder secrets with CHANGE_ME values in Kubernetes manifests | `grafana-deployment.yaml:133`, `alertmanager-deployment.yaml:79`, `redis-sentinel.yaml:608` | Reference ExternalSecret resources instead of hardcoded Secret manifests |
+| 4 | Low | Example tokens in docstrings | `graphql.py:108`, `rest.py:75` | Low risk but consider using `<token>` placeholder format for consistency |
+
+**Positive Observations:**
+- External Secrets Operator is properly configured with ClusterSecretStore for AWS Secrets Manager (`external-secrets.yaml:15-40`)
+- SecretStore for HashiCorp Vault configured for both production and staging (`external-secrets.yaml:42-88`)
+- ClusterSecretStore for Google Secret Manager available (`external-secrets.yaml:90-112`)
+- ExternalSecret resources defined for database, Redis, and MinIO credentials (`external-secrets.yaml:115-220`)
+- Templates properly use mustache syntax `{{ .password }}` for secret injection
+- `.env.example` files follow good practice of using placeholder format for sensitive API keys (`your_api_key_here`)
+- No real production secrets found committed to repository
+- `.gitignore` properly excludes `.env` files (only `.env.example` committed)
+
+**Details:**
+
+**High: Hardcoded Development Passwords (definitions.py:164,172)**
+```python
+"database": DatabaseResource(
+    password="foundry_dev",  # Line 164
+),
+"iceberg": IcebergResource(
+    s3_secret_key="minio123",  # Line 172
+),
+```
+While marked as development defaults, these hardcoded credentials could be accidentally used in production if environment variables are not properly set. Should use `EnvVar.get_required()` pattern to fail fast if credentials are missing.
+
+**High: Development Passwords in .env.example (.env.example:16,32,68)**
+```
+DB_PASSWORD=foundry_dev
+S3_SECRET_KEY=minio123
+DAGSTER_POSTGRES_PASSWORD=foundry_dev
+```
+The `.env.example` contains actual development passwords rather than placeholders. While these are development-only values, it establishes a bad pattern. Should use `<your-password-here>` format.
+
+**Medium: CHANGE_ME Placeholder Secrets in K8s Manifests**
+
+Multiple Kubernetes Secret manifests contain hardcoded placeholder values:
+```yaml
+# grafana-deployment.yaml:133
+admin-password: "CHANGE_ME_IN_PRODUCTION"
+
+# alertmanager-deployment.yaml:79
+smtp-password: "CHANGE_ME"
+
+# redis-sentinel.yaml:608
+password: "CHANGE_ME_IN_PRODUCTION"
+```
+While these are clearly marked as placeholders, the manifests should reference ExternalSecret resources rather than defining Secrets with hardcoded values. This ensures secrets are never committed, even as placeholders.
+
+**Git History Check:**
+No historical commits containing production secrets were found. All secret-like strings in history are development defaults or template values.
 
 ### Dependency Vulnerabilities
-_Pending review._
+
+**Status:** Reviewed
+
+**Findings:**
+
+| # | Severity | Issue | Package | Recommendation |
+|---|----------|-------|---------|----------------|
+| 1 | Critical | 13 known vulnerabilities including SSRF, Auth Bypass, DoS, Cache Poisoning | `next@14.x` | Upgrade to `next@15.x` or later (breaking change) |
+| 2 | High | Command injection via --cmd flag | `glob@10.2.0-10.4.5` | Upgrade to `glob@11.x` via `npm audit fix --force` |
+| 3 | Moderate | Development server request vulnerability | `esbuild<=0.24.2` | Upgrade via `npm audit fix --force` (requires vitest update) |
+| 4 | Moderate | esbuild vulnerability propagates through vite | `vite@0.11.0-6.1.6` | Upgrade vitest to latest for patched vite-node |
+| 5 | Low | Python dependency version floors may include vulnerable versions | `langchain>=0.2.0`, `fastapi>=0.110.0` | Pin to specific versions and run `pip-audit` in CI |
+
+**npm Audit Summary (packages/ui):**
+```
+13 critical (next)
+1 high (glob)
+4 moderate (esbuild, vite chain)
+```
+
+**Details:**
+
+**Critical: Next.js Vulnerabilities (next@14.x)**
+
+The UI package uses Next.js 14.x which has 13 documented security vulnerabilities:
+- GHSA-fr5h-rqp8-mj6g: Server-Side Request Forgery in Server Actions
+- GHSA-7gfc-8cq8-jh5f: Authorization bypass vulnerability
+- GHSA-f82v-jwr5-mffw: Authorization Bypass in Middleware
+- GHSA-gp8f-8m3g-qvj9: Cache Poisoning
+- GHSA-g77x-44xx-532m: DoS in image optimization
+- GHSA-7m27-7ghc-44w9: DoS with Server Actions
+- GHSA-3h52-269p-cp9r: Information exposure in dev server
+- GHSA-g5qg-72qw-gw5v: Cache Key Confusion for Image Optimization
+- GHSA-4342-x723-ch2f: SSRF via Middleware Redirect
+- GHSA-xv57-4mr9-wg8v: Content Injection in Image Optimization
+- GHSA-qpjv-v59x-3qc4: Race Condition Cache Poisoning
+- GHSA-mwv6-3258-q52c: DoS with Server Components
+- GHSA-5j59-xgg2-r9c4: DoS with Server Components (follow-up)
+
+**Recommendation:** Upgrade to Next.js 15.x. This is a breaking change requiring migration effort.
+
+**High: glob Command Injection (glob@10.2.0-10.4.5)**
+
+GHSA-5j98-mcp5-4vw2: The glob CLI allows command injection through the `-c/--cmd` flag with `shell:true`. This affects `@next/eslint-plugin-next` and `eslint-config-next`.
+
+**Recommendation:** Run `npm audit fix --force` to upgrade eslint-config-next to 16.x.
+
+**Moderate: esbuild Development Server Vulnerability**
+
+GHSA-67mh-4wv8-2f99: esbuild <= 0.24.2 allows any website to send requests to the development server. This propagates through vite-node and vitest.
+
+**Recommendation:** Upgrade vitest to 4.x for patched dependencies.
+
+**Python Dependencies:**
+
+Current version floors in pyproject.toml files:
+- `langchain>=0.2.0` - LangChain has had security patches; pin to specific version
+- `fastapi>=0.110.0` - Should pin to specific version for reproducibility
+- `pydantic>=2.0.0` - Broad version range
+- `sqlalchemy>=2.0.0` - Broad version range
+
+**Recommendations:**
+1. Pin Python dependencies to specific versions or narrower ranges
+2. Add `pip-audit` to CI pipeline for vulnerability scanning
+3. Run `safety check` or `pip-audit` before releases
+4. Consider using `dependabot` or `renovate` for automated updates
 
 ---
 

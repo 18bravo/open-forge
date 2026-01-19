@@ -322,7 +322,38 @@ Current version floors in pyproject.toml files:
 ## Code Quality Review
 
 ### Package: core
-_Pending review._
+
+**Status:** Reviewed
+
+**Summary:** The core package provides foundational infrastructure including configuration management, database connections (PostgreSQL with SQLAlchemy, Apache AGE graph database), messaging (Redis Streams event bus), storage (Apache Iceberg data lake), and observability (OpenTelemetry tracing, LangSmith integration). The codebase is well-organized with 705 lines in the largest file (langsmith.py).
+
+**Findings:**
+
+| # | Severity | Issue | Location | Recommendation |
+|---|----------|-------|----------|----------------|
+| 1 | High | Bare `except Exception:` silently swallows all exceptions | `iceberg.py:38-39` | Log the exception or re-raise specific expected errors; bare pass after exception hides real failures |
+| 2 | High | Bare `except Exception:` for consumer group creation | `events.py:83-84` | Log when group already exists; catch specific Redis exception (e.g., `ResponseError`) instead |
+| 3 | Medium | Missing return type annotations on 15+ public methods | `graph.py:29,57,69,97`, `langsmith.py:161,232,310,358,412,477,542,629` | Add return type annotations for better IDE support and documentation |
+| 4 | Medium | Module-level settings instantiation blocks testing | `connection.py:12`, `iceberg.py:16`, `events.py:12`, `tracing.py:19` | Use lazy initialization or dependency injection to enable mocking in tests |
+| 5 | Medium | Print statement used for error logging | `events.py:107` | Replace `print(f"Handler error: {e}")` with proper logging using the `logging` module |
+| 6 | Medium | `traced()` decorator parameter defaults to `None` string type | `tracing.py:62` | Use `Optional[str] = None` type hint for clarity: `def traced(name: Optional[str] = None)` |
+| 7 | Low | Global mutable instance pattern for singletons | `langsmith.py:662-675` | Consider using `@lru_cache` pattern (like `get_settings()`) for cleaner singleton management |
+| 8 | Low | Largest file (langsmith.py) is 705 lines | `langsmith.py` | Consider splitting into separate modules: config, decorators, client, models |
+| 9 | Low | Async functions not needed for some LangSmith methods | `langsmith.py:358,412,477,542` | `log_feedback`, `get_engagement_traces`, etc. don't use await internally; consider sync alternatives |
+| 10 | Low | `datetime.utcnow()` deprecation | `langsmith.py:77` | Replace `datetime.utcnow` with `datetime.now(timezone.utc)` per Python 3.12 deprecation |
+
+**Positive Observations:**
+- Excellent use of Pydantic models for configuration with environment variable support (`config.py`)
+- Clean context manager patterns for database sessions (`connection.py:40-51`, `connection.py:53-62`)
+- Type hints consistently applied throughout the codebase with proper use of `Optional`, `Dict`, `List`, `Any`
+- Good separation of sync/async database operations with separate engines and session factories
+- Well-documented classes and methods with docstrings explaining purpose, parameters, and return values
+- LangSmith integration provides comprehensive tracing with both decorator and context manager patterns
+- Proper use of `functools.wraps` to preserve decorated function metadata (`tracing.py:68`, `langsmith.py:184,205`)
+- Good use of properties for computed values (`config.py:20-25`, `config.py:42-45`)
+- Settings cached with `@lru_cache()` decorator for efficient access (`config.py:71-73`)
+- Comprehensive Pydantic models with proper Field constraints in LangSmith module
+- Event bus implements proper consumer group patterns for Redis Streams
 
 ### Package: agent-framework
 _Pending review._

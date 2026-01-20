@@ -2,6 +2,7 @@
 Base SQL connector for relational databases.
 Provides common functionality for PostgreSQL, MySQL, and other SQL databases.
 """
+import re
 import time
 from abc import abstractmethod
 from typing import Any, Dict, List, Optional
@@ -9,6 +10,74 @@ from typing import Any, Dict, List, Optional
 from pydantic import Field
 from sqlalchemy import text, inspect
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
+
+
+class IdentifierValidationError(Exception):
+    """Raised when a SQL identifier fails validation."""
+    pass
+
+
+def validate_identifier(identifier: str) -> str:
+    """
+    Validate and return a safe SQL identifier.
+
+    Only allows alphanumeric characters, underscores, and dots (for schema.table).
+    This prevents SQL injection through table/column names.
+
+    Args:
+        identifier: The identifier to validate
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        IdentifierValidationError: If identifier contains unsafe characters
+    """
+    if not identifier:
+        raise IdentifierValidationError("Identifier cannot be empty")
+
+    # Pattern: allows schema.table format with alphanumeric and underscores
+    # Examples: "users", "public.users", "my_schema.my_table"
+    pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$'
+
+    if not re.match(pattern, identifier):
+        raise IdentifierValidationError(
+            f"Invalid identifier '{identifier}'. "
+            "Identifiers must start with a letter or underscore, "
+            "contain only alphanumeric characters and underscores, "
+            "and optionally include a schema prefix (schema.table)."
+        )
+
+    # Additional length check to prevent DoS
+    if len(identifier) > 128:
+        raise IdentifierValidationError(
+            f"Identifier too long ({len(identifier)} chars). Maximum is 128."
+        )
+
+    return identifier
+
+
+def quote_identifier(identifier: str) -> str:
+    """
+    Validate and quote a SQL identifier for safe use in queries.
+
+    Uses double quotes which is ANSI SQL standard for identifiers.
+
+    Args:
+        identifier: The identifier to validate and quote
+
+    Returns:
+        The quoted identifier safe for use in SQL
+
+    Raises:
+        IdentifierValidationError: If identifier is invalid
+    """
+    validated = validate_identifier(identifier)
+
+    # Split on dot for schema.table format
+    parts = validated.split('.')
+    quoted_parts = [f'"{part}"' for part in parts]
+    return '.'.join(quoted_parts)
 
 from connectors.base import (
     BaseConnector,
@@ -192,7 +261,13 @@ class BaseSQLConnector(BaseConnector):
 
         Returns:
             SampleData with schema and rows.
+
+        Raises:
+            IdentifierValidationError: If table name contains unsafe characters.
         """
+        # Validate and quote table name to prevent SQL injection
+        safe_table = quote_identifier(source)
+
         # First get the schema
         schemas = await self.fetch_schema(source)
         if not schemas:
@@ -201,15 +276,15 @@ class BaseSQLConnector(BaseConnector):
 
         # Get sample data
         async with self.engine.connect() as conn:
-            # Get total count
+            # Get total count - using validated/quoted identifier
             count_result = await conn.execute(
-                text(f"SELECT COUNT(*) FROM {source}")
+                text(f"SELECT COUNT(*) FROM {safe_table}")
             )
             total_count = count_result.scalar()
 
-            # Get sample rows
+            # Get sample rows - using validated/quoted identifier
             result = await conn.execute(
-                text(f"SELECT * FROM {source} LIMIT :limit"),
+                text(f"SELECT * FROM {safe_table} LIMIT :limit"),
                 {"limit": limit}
             )
             columns = result.keys()

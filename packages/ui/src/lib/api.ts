@@ -14,6 +14,7 @@ import {
   demoDashboardMetrics,
   demoAgentClusters,
   demoAgentTasks,
+  demoAgentTaskDetails,
   paginateDemo,
 } from './demo-data';
 
@@ -314,9 +315,19 @@ function getDemoResponse<T>(endpoint: string): T {
     return paginateDemo(demoAgentClusters, page, pageSize) as T;
   }
 
-  // Agent tasks
+  // Agent tasks - check for engagement filter
   if (path === '/agents/tasks') {
+    const engagementId = params.get('engagement_id');
+    if (engagementId) {
+      const engagementTasks = demoAgentTasks.filter(t => t.engagement_id === engagementId);
+      return paginateDemo(engagementTasks, page, pageSize) as T;
+    }
     return paginateDemo(demoAgentTasks, page, pageSize) as T;
+  }
+  // Individual agent task
+  if (path.match(/^\/agents\/tasks\/[\w-]+$/)) {
+    const id = path.split('/')[3];
+    return (demoAgentTaskDetails[id] || demoAgentTaskDetails['task-001']) as T;
   }
 
   // Default empty response for unmatched endpoints

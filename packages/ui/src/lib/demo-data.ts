@@ -14,6 +14,7 @@ import type {
   DashboardMetrics,
   AgentClusterSummary,
   AgentTaskSummary,
+  AgentTask,
   PaginatedResponse,
 } from './api';
 
@@ -408,6 +409,117 @@ export const demoAgentTasks: AgentTaskSummary[] = [
     created_at: '2026-01-19T12:15:00Z',
   },
 ];
+
+export const demoAgentTaskDetails: Record<string, AgentTask> = {
+  'task-001': {
+    id: 'task-001',
+    engagement_id: 'eng-001',
+    task_type: 'data_extraction',
+    description: 'Extract customer records from PostgreSQL and Salesforce',
+    status: 'running',
+    tools: ['sql_query', 'api_fetch', 'data_transform'],
+    max_iterations: 50,
+    current_iteration: 15,
+    timeout_seconds: 1800,
+    messages: [
+      {
+        id: 'msg-001',
+        role: 'system',
+        content: 'Starting data extraction task for Customer 360 Integration',
+        timestamp: '2026-01-19T14:00:00Z',
+      },
+      {
+        id: 'msg-002',
+        role: 'assistant',
+        content: 'Connecting to PostgreSQL database to extract customer records...',
+        timestamp: '2026-01-19T14:00:30Z',
+      },
+      {
+        id: 'msg-003',
+        role: 'assistant',
+        content: 'Successfully extracted 25,000 records from customers table. Now fetching Salesforce data...',
+        timestamp: '2026-01-19T14:05:00Z',
+        tool_calls: [
+          {
+            id: 'tc-001',
+            name: 'sql_query',
+            arguments: { query: 'SELECT * FROM customers WHERE updated_at > :last_sync', limit: 50000 },
+            result: { rows_returned: 25000, execution_time_ms: 1250 },
+            status: 'completed',
+            duration_ms: 1250,
+          },
+        ],
+      },
+    ],
+    pending_tool_approvals: [],
+    created_at: '2026-01-19T14:00:00Z',
+    started_at: '2026-01-19T14:00:00Z',
+  },
+  'task-002': {
+    id: 'task-002',
+    engagement_id: 'eng-001',
+    task_type: 'data_validation',
+    description: 'Validate extracted customer data for quality and completeness',
+    status: 'completed',
+    tools: ['schema_validator', 'null_checker', 'duplicate_detector'],
+    max_iterations: 20,
+    current_iteration: 8,
+    timeout_seconds: 900,
+    messages: [
+      {
+        id: 'msg-004',
+        role: 'system',
+        content: 'Starting data validation task',
+        timestamp: '2026-01-19T13:30:00Z',
+      },
+      {
+        id: 'msg-005',
+        role: 'assistant',
+        content: 'Validation complete. Found 98.5% data quality score with 375 records requiring attention.',
+        timestamp: '2026-01-19T14:25:00Z',
+      },
+    ],
+    pending_tool_approvals: [],
+    created_at: '2026-01-19T13:30:00Z',
+    started_at: '2026-01-19T13:30:00Z',
+    completed_at: '2026-01-19T14:25:00Z',
+  },
+  'task-003': {
+    id: 'task-003',
+    engagement_id: 'eng-005',
+    task_type: 'schema_mapping',
+    description: 'Map source schema to target ontology for Supply Chain Analytics',
+    status: 'waiting_approval',
+    tools: ['schema_analyzer', 'ontology_mapper', 'transform_generator'],
+    max_iterations: 30,
+    current_iteration: 3,
+    timeout_seconds: 1200,
+    messages: [
+      {
+        id: 'msg-006',
+        role: 'system',
+        content: 'Starting schema mapping task',
+        timestamp: '2026-01-19T12:15:00Z',
+      },
+      {
+        id: 'msg-007',
+        role: 'assistant',
+        content: 'Requesting approval to modify target schema with proposed mappings.',
+        timestamp: '2026-01-19T12:30:00Z',
+      },
+    ],
+    pending_tool_approvals: [
+      {
+        id: 'tc-002',
+        name: 'schema_modify',
+        arguments: { table: 'supply_chain_entities', add_columns: ['supplier_rating', 'lead_time_days'] },
+        status: 'pending',
+      },
+    ],
+    created_at: '2026-01-19T12:15:00Z',
+    started_at: '2026-01-19T12:15:00Z',
+  },
+};
 
 // =============================================================================
 // Helper to create paginated responses

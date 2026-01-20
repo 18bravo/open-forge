@@ -37,5 +37,13 @@ export function setGlobalDemoMode(enabled: boolean) {
 }
 
 export function isGlobalDemoMode(): boolean {
-  return globalDemoMode;
+  // Check the global flag first
+  if (globalDemoMode) return true;
+
+  // Fallback: check if we're on a /demo/ path (handles initial render before useEffect runs)
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/demo')) {
+    return true;
+  }
+
+  return false;
 }

@@ -17,6 +17,7 @@ from dagster import (
 import polars as pl
 
 from pipelines.resources import DatabaseResource, IcebergResource, EventBusResource
+from pipelines.utils.safe_expression import parse_safe_expression, ExpressionParseError
 
 
 class TransformationConfig(Config):
@@ -255,10 +256,12 @@ def enriched_data(
     if config.derived_columns:
         for col_name, expression in config.derived_columns.items():
             try:
-                # Parse and evaluate polars expression
-                # Note: In production, use a safer expression parser
-                df = df.with_columns(eval(expression).alias(col_name))
+                # Parse expression safely without using eval()
+                expr = parse_safe_expression(expression)
+                df = df.with_columns(expr.alias(col_name))
                 enrichments_applied.append(f"Derived column: {col_name}")
+            except ExpressionParseError as e:
+                context.log.warning(f"Invalid expression for column {col_name}: {e}")
             except Exception as e:
                 context.log.warning(f"Failed to create derived column {col_name}: {e}")
 

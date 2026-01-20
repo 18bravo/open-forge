@@ -1,6 +1,7 @@
 """
 FastAPI dependencies for dependency injection.
 """
+import os
 from typing import Annotated, AsyncGenerator, Optional
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.connection import AsyncSessionLocal
 from core.messaging.events import EventBus
 from api.schemas.common import UserContext
+from api.auth import decode_access_token
 
 
 # Global event bus instance
@@ -98,22 +100,29 @@ async def get_current_user(
 
         token = authorization[7:]
 
-        # TODO: Implement proper JWT validation
-        # For now, use a placeholder implementation
-        if token == "test-token":
-            return UserContext(
-                user_id="test-user",
-                username="test_user",
-                email="test@example.com",
-                roles=["admin"],
-                permissions=["read", "write", "admin"]
-            )
+        # Validate JWT token
+        try:
+            payload = decode_access_token(token)
+            if payload is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired token",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+            return UserContext(
+                user_id=payload.sub,
+                username=payload.username,
+                email=payload.email,
+                roles=payload.roles,
+                permissions=payload.permissions,
+            )
+        except ValueError as e:
+            # JWT_SECRET_KEY not configured
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Authentication service not configured",
+            ) from e
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

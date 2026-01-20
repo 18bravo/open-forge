@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { setGlobalDemoMode } from '@/lib/demo-context';
 import { DemoBanner } from '@/components/demo-banner';
+import { DemoLinkInterceptor } from '@/components/demo-link-interceptor';
 
 interface NavItem {
   title: string;
@@ -152,7 +153,9 @@ export default function DemoLayout({ children }: DemoLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <DemoLinkInterceptor>
+            {children}
+          </DemoLinkInterceptor>
         </main>
       </div>
     </div>

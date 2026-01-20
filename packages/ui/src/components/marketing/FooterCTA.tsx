@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Github, BookOpen, Mail, ExternalLink } from 'lucide-react';
 
 interface CtaCard {
@@ -111,7 +112,13 @@ export function FooterCTA() {
           <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
             <div>
               <Link href="/" className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600" />
+                <Image
+                  src="/open_forge.png"
+                  alt="Open Forge"
+                  width={32}
+                  height={32}
+                  className="h-8 w-8"
+                />
                 <span className="text-xl font-bold text-zinc-50">Open Forge</span>
               </Link>
               <p className="text-sm text-zinc-500">

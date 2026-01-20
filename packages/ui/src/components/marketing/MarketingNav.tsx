@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
 import { Menu, X, Github, Play } from 'lucide-react';
 
@@ -46,7 +47,13 @@ export function MarketingNav() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600" />
+          <Image
+            src="/open_forge.png"
+            alt="Open Forge"
+            width={32}
+            height={32}
+            className="h-8 w-8"
+          />
           <span className="text-xl font-bold">Open Forge</span>
         </Link>
 

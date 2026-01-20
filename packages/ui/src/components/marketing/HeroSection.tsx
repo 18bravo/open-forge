@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Github, ArrowRight, Rocket } from 'lucide-react';
 
 export function HeroSection() {
@@ -18,6 +19,18 @@ export function HeroSection() {
           backgroundSize: '60px 60px',
         }}
       />
+
+      {/* Large background logo watermark */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <Image
+          src="/open_forge.png"
+          alt=""
+          width={800}
+          height={800}
+          className="w-[500px] h-[500px] sm:w-[600px] sm:h-[600px] lg:w-[800px] lg:h-[800px] opacity-20"
+          priority
+        />
+      </div>
 
       <div className="relative z-10 mx-auto max-w-5xl px-6 text-center">
         {/* Badge */}

@@ -38,15 +38,16 @@ interface Tab {
 
 interface EngagementLayoutProps {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function EngagementLayout({ children, params }: EngagementLayoutProps) {
+  const { id } = React.use(params);
   const pathname = usePathname();
-  const basePath = `/engagements/${params.id}`;
+  const basePath = `/engagements/${id}`;
 
   // Fetch engagement data from API
-  const { data: engagement, isLoading, error } = useEngagement(params.id);
+  const { data: engagement, isLoading, error } = useEngagement(id);
   const updateStatus = useUpdateEngagementStatus();
 
   const tabs: Tab[] = [

@@ -50,10 +50,11 @@ const approvalTypeColors: Record<ApprovalType, string> = {
 };
 
 interface ApprovalsPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function ApprovalsPage({ params }: ApprovalsPageProps) {
+  const { id: engagementId } = React.use(params);
   const [selectedApprovalId, setSelectedApprovalId] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<'all' | 'pending' | 'resolved'>('all');
   const [rejectionReason, setRejectionReason] = React.useState('');

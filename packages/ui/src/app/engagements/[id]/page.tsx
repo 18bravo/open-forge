@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
 
 interface EngagementPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-export default function EngagementPage({ params }: EngagementPageProps) {
+export default async function EngagementPage({ params }: EngagementPageProps) {
+  const { id } = await params;
   // Redirect to overview tab
-  redirect(`/engagements/${params.id}/overview`);
+  redirect(`/engagements/${id}/overview`);
 }

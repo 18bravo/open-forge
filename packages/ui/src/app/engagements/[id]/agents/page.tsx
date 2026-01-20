@@ -41,11 +41,12 @@ const taskStatusIcons: Record<AgentTaskStatus, React.ReactNode> = {
 };
 
 interface AgentsPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function AgentsPage({ params }: AgentsPageProps) {
-  const { data: tasksData, isLoading, error } = useAgentTasks(params.id);
+  const { id } = React.use(params);
+  const { data: tasksData, isLoading, error } = useAgentTasks(id);
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
 
   const tasks = tasksData?.items ?? [];

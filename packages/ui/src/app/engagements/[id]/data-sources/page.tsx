@@ -41,11 +41,12 @@ const sourceTypeIcons: Record<string, React.ReactNode> = {
 };
 
 interface DataSourcesPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function DataSourcesPage({ params }: DataSourcesPageProps) {
-  const { data: engagement, isLoading: engLoading, error: engError } = useEngagement(params.id);
+  const { id } = React.use(params);
+  const { data: engagement, isLoading: engLoading, error: engError } = useEngagement(id);
 
   if (engLoading) {
     return (

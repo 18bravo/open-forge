@@ -118,10 +118,11 @@ const mockOntology: OntologyEntity[] = [
 ];
 
 interface OntologyPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function OntologyPage({ params }: OntologyPageProps) {
+  const { id: engagementId } = React.use(params);
   const [search, setSearch] = React.useState('');
   const [selectedEntity, setSelectedEntity] = React.useState<OntologyEntity | null>(mockOntology[0]);
   const [expandedEntities, setExpandedEntities] = React.useState<Set<string>>(new Set(['customer']));

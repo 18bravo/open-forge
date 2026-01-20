@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, use } from 'react';
 import {
   Card,
   CardContent,
@@ -40,12 +40,13 @@ const priorityColors: Record<string, string> = {
 const mockActivities: ActivityItem[] = [];
 
 interface OverviewPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default function OverviewPage({ params }: OverviewPageProps) {
-  const { data: engagement, isLoading: engLoading, error: engError } = useEngagement(params.id);
-  const { data: tasksData, isLoading: tasksLoading } = useAgentTasks(params.id);
+  const { id } = use(params);
+  const { data: engagement, isLoading: engLoading, error: engError } = useEngagement(id);
+  const { data: tasksData, isLoading: tasksLoading } = useAgentTasks(id);
   const { data: approvalsData, isLoading: approvalsLoading } = useApprovals({ pending_only: true });
 
   if (engLoading) {

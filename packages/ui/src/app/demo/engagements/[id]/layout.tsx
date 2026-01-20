@@ -38,7 +38,7 @@ interface Tab {
 
 interface EngagementLayoutProps {
   children: React.ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 /**
@@ -46,11 +46,12 @@ interface EngagementLayoutProps {
  * Uses /demo prefixed paths for navigation
  */
 export default function DemoEngagementLayout({ children, params }: EngagementLayoutProps) {
+  const { id } = React.use(params);
   const pathname = usePathname();
-  const basePath = `/demo/engagements/${params.id}`;
+  const basePath = `/demo/engagements/${id}`;
 
   // Fetch engagement data from API (demo mode will return mock data)
-  const { data: engagement, isLoading, error } = useEngagement(params.id);
+  const { data: engagement, isLoading, error } = useEngagement(id);
   const updateStatus = useUpdateEngagementStatus();
 
   const tabs: Tab[] = [

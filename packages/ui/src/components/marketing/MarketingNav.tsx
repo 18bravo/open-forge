@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, Github } from 'lucide-react';
+import { Menu, X, Github, Play } from 'lucide-react';
 
 interface NavLink {
   href: string;
@@ -68,6 +68,13 @@ export function MarketingNav() {
             <Github className="h-4 w-4" />
             Star on GitHub
           </a>
+          <Link
+            href="/demo/dashboard"
+            className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+          >
+            <Play className="h-4 w-4" />
+            Launch Demo
+          </Link>
         </div>
 
         {/* Mobile Menu Button */}
@@ -92,6 +99,14 @@ export function MarketingNav() {
               onClick={() => setMobileMenuOpen(false)}
             />
           ))}
+          <Link
+            href="/demo/dashboard"
+            className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-3 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <Play className="h-4 w-4" />
+            Launch Demo
+          </Link>
         </div>
       )}
     </header>

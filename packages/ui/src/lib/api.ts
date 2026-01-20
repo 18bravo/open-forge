@@ -2,6 +2,21 @@
  * API client for Open Forge backend
  */
 
+import { isGlobalDemoMode } from './demo-context';
+import {
+  demoEngagements,
+  demoEngagementDetails,
+  demoDataSources,
+  demoDataSourceDetails,
+  demoApprovals,
+  demoApprovalDetails,
+  demoActivities,
+  demoDashboardMetrics,
+  demoAgentClusters,
+  demoAgentTasks,
+  paginateDemo,
+} from './demo-data';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 /**
@@ -244,10 +259,81 @@ export interface PaginatedResponse<T> {
 
 // API functions
 
+/**
+ * Returns mock data for demo mode based on endpoint
+ */
+function getDemoResponse<T>(endpoint: string): T {
+  // Parse endpoint and query params
+  const [path, queryString] = endpoint.split('?');
+  const params = new URLSearchParams(queryString || '');
+  const page = parseInt(params.get('page') || '1');
+  const pageSize = parseInt(params.get('page_size') || '10');
+
+  // Engagements
+  if (path === '/engagements') {
+    return paginateDemo(demoEngagements, page, pageSize) as T;
+  }
+  if (path.match(/^\/engagements\/[\w-]+$/)) {
+    const id = path.split('/')[2];
+    return (demoEngagementDetails[id] || demoEngagementDetails['eng-001']) as T;
+  }
+
+  // Data Sources
+  if (path === '/data-sources') {
+    return paginateDemo(demoDataSources, page, pageSize) as T;
+  }
+  if (path.match(/^\/data-sources\/[\w-]+$/)) {
+    const id = path.split('/')[2];
+    return (demoDataSourceDetails[id] || demoDataSourceDetails['ds-001']) as T;
+  }
+
+  // Approvals
+  if (path === '/approvals') {
+    return paginateDemo(demoApprovals, page, pageSize) as T;
+  }
+  if (path.match(/^\/approvals\/[\w-]+$/)) {
+    const id = path.split('/')[2];
+    return (demoApprovalDetails[id] || demoApprovalDetails['apr-001']) as T;
+  }
+
+  // Dashboard
+  if (path === '/dashboard/metrics') {
+    return demoDashboardMetrics as T;
+  }
+
+  // Activities
+  if (path === '/activities/recent') {
+    return { items: demoActivities } as T;
+  }
+  if (path.match(/^\/engagements\/[\w-]+\/activities$/)) {
+    return { items: demoActivities.slice(0, 5) } as T;
+  }
+
+  // Agent clusters
+  if (path === '/admin/agents/clusters') {
+    return paginateDemo(demoAgentClusters, page, pageSize) as T;
+  }
+
+  // Agent tasks
+  if (path === '/agents/tasks') {
+    return paginateDemo(demoAgentTasks, page, pageSize) as T;
+  }
+
+  // Default empty response for unmatched endpoints
+  return { items: [], total: 0, page: 1, page_size: pageSize, total_pages: 0 } as T;
+}
+
 async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  // Check for demo mode - return mock data instead of calling real API
+  if (isGlobalDemoMode()) {
+    // Simulate network delay for realism
+    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+    return getDemoResponse<T>(endpoint);
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
     ...options,

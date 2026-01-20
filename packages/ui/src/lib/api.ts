@@ -15,6 +15,9 @@ import {
   demoAgentClusters,
   demoAgentTasks,
   demoAgentTaskDetails,
+  demoSystemHealth,
+  demoAdminDashboardStats,
+  demoAlerts,
   paginateDemo,
 } from './demo-data';
 
@@ -328,6 +331,17 @@ function getDemoResponse<T>(endpoint: string): T {
   if (path.match(/^\/agents\/tasks\/[\w-]+$/)) {
     const id = path.split('/')[3];
     return (demoAgentTaskDetails[id] || demoAgentTaskDetails['task-001']) as T;
+  }
+
+  // Admin endpoints
+  if (path === '/admin/health') {
+    return demoSystemHealth as T;
+  }
+  if (path === '/admin/dashboard/stats') {
+    return demoAdminDashboardStats as T;
+  }
+  if (path === '/admin/alerts') {
+    return demoAlerts as T;
   }
 
   // Default empty response for unmatched endpoints

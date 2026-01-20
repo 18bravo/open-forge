@@ -343,6 +343,61 @@ export const demoDashboardMetrics: DashboardMetrics = {
 };
 
 // =============================================================================
+// Admin System Health
+// =============================================================================
+
+export const demoSystemHealth = {
+  services: [
+    { name: 'API Server', status: 'healthy' as const, latency_ms: 45, last_check: '2026-01-19T14:30:00Z' },
+    { name: 'Database (PostgreSQL)', status: 'healthy' as const, latency_ms: 12, last_check: '2026-01-19T14:30:00Z' },
+    { name: 'Cache (Redis)', status: 'healthy' as const, latency_ms: 2, last_check: '2026-01-19T14:30:00Z' },
+    { name: 'Message Queue (Kafka)', status: 'healthy' as const, latency_ms: 8, last_check: '2026-01-19T14:30:00Z' },
+    { name: 'Agent Orchestrator', status: 'healthy' as const, latency_ms: 23, last_check: '2026-01-19T14:30:00Z' },
+    { name: 'ML Pipeline Service', status: 'degraded' as const, latency_ms: 450, last_check: '2026-01-19T14:30:00Z' },
+  ],
+  overall_status: 'degraded' as const,
+  timestamp: '2026-01-19T14:30:00Z',
+};
+
+export const demoAdminDashboardStats = {
+  system_health: { healthy: 5, degraded: 1, unhealthy: 0 },
+  engagements: { total: 5, active: 2, pending: 1, completed: 2 },
+  agents: { total_clusters: 3, running_instances: 6, queued_tasks: 2 },
+  approvals: { pending: 2, approved_today: 5, rejected_today: 1 },
+};
+
+export const demoAlerts = [
+  {
+    id: 'alert-001',
+    severity: 'warning' as const,
+    message: 'ML Pipeline Service experiencing high latency (450ms)',
+    timestamp: '2026-01-19T14:25:00Z',
+    source: 'Health Monitor',
+  },
+  {
+    id: 'alert-002',
+    severity: 'info' as const,
+    message: 'Customer 360 Integration task completed successfully',
+    timestamp: '2026-01-19T14:20:00Z',
+    source: 'Agent Orchestrator',
+  },
+  {
+    id: 'alert-003',
+    severity: 'warning' as const,
+    message: 'Approval request apr-002 expiring in 6 hours',
+    timestamp: '2026-01-19T14:00:00Z',
+    source: 'Approval Service',
+  },
+  {
+    id: 'alert-004',
+    severity: 'info' as const,
+    message: 'New data source "Kafka Event Stream" connected',
+    timestamp: '2026-01-19T10:30:00Z',
+    source: 'Connector Service',
+  },
+];
+
+// =============================================================================
 // Agent Clusters
 // =============================================================================
 

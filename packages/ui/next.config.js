@@ -2,10 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Enable experimental features for App Router
-  experimental: {
-    typedRoutes: true,
-  },
+  // Enable typed routes (moved from experimental in Next.js 16)
+  typedRoutes: true,
+
+  // Turbopack configuration (default in Next.js 16)
+  turbopack: {},
 
   // Image optimization configuration
   images: {
@@ -20,12 +21,6 @@ const nextConfig = {
   // Environment variables that should be available on the client
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-
-  // Webpack configuration for any custom needs
-  webpack: (config, { isServer }) => {
-    // Add any custom webpack configuration here
-    return config;
   },
 
   // Headers for security and CORS

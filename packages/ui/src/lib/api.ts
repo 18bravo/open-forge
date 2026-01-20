@@ -13,6 +13,7 @@ import {
   demoActivities,
   demoDashboardMetrics,
   demoAgentClusters,
+  demoAgentClusterDetails,
   demoAgentTypes,
   demoAgentTasks,
   demoAgentTaskDetails,
@@ -317,6 +318,11 @@ function getDemoResponse<T>(endpoint: string): T {
   // Agent clusters
   if (path === '/admin/agents/clusters') {
     return paginateDemo(demoAgentClusters, page, pageSize) as T;
+  }
+  // Individual agent cluster
+  if (path.match(/^\/admin\/agents\/clusters\/[\w-]+$/)) {
+    const slug = path.split('/')[4];
+    return (demoAgentClusterDetails[slug] || demoAgentClusterDetails['data-integration']) as T;
   }
 
   // Agent types

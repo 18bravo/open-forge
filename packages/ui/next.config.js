@@ -2,10 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Enable experimental features for App Router
-  experimental: {
-    typedRoutes: true,
-  },
+  // Enable typed routes (moved from experimental in Next.js 16)
+  typedRoutes: true,
+
+  // Turbopack configuration (default in Next.js 16)
+  turbopack: {},
 
   // Image optimization configuration
   images: {

@@ -20,6 +20,16 @@ import {
   demoSystemHealth,
   demoAdminDashboardStats,
   demoAlerts,
+  demoPipelines,
+  demoPipelineDetails,
+  demoPipelineRuns,
+  demoSystemSettings,
+  demoConnectors,
+  demoUsers,
+  demoAuditLogs,
+  demoReviews,
+  demoReviewDetails,
+  demoReviewStats,
   paginateDemo,
 } from './demo-data';
 
@@ -354,6 +364,98 @@ function getDemoResponse<T>(endpoint: string): T {
   }
   if (path === '/admin/alerts') {
     return demoAlerts as T;
+  }
+
+  // Pipelines
+  if (path === '/admin/pipelines') {
+    return paginateDemo(demoPipelines, page, pageSize) as T;
+  }
+  if (path.match(/^\/admin\/pipelines\/[\w-]+$/)) {
+    const id = path.split('/')[3];
+    return (demoPipelineDetails[id] || demoPipelineDetails['pipeline-001']) as T;
+  }
+  if (path === '/admin/pipelines/runs') {
+    const pipelineId = params.get('pipeline_id');
+    if (pipelineId) {
+      const filteredRuns = demoPipelineRuns.filter(r => r.pipeline_id === pipelineId);
+      return paginateDemo(filteredRuns, page, pageSize) as T;
+    }
+    return paginateDemo(demoPipelineRuns, page, pageSize) as T;
+  }
+
+  // Settings
+  if (path === '/admin/settings') {
+    return demoSystemSettings as T;
+  }
+  if (path === '/admin/settings/connectors') {
+    const typeFilter = params.get('type');
+    if (typeFilter) {
+      const filtered = demoConnectors.filter(c => c.type === typeFilter);
+      return paginateDemo(filtered, page, pageSize) as T;
+    }
+    return paginateDemo(demoConnectors, page, pageSize) as T;
+  }
+  if (path === '/admin/settings/users') {
+    const roleFilter = params.get('role');
+    const statusFilter = params.get('status');
+    let filtered = demoUsers;
+    if (roleFilter) filtered = filtered.filter(u => u.role === roleFilter);
+    if (statusFilter) filtered = filtered.filter(u => u.status === statusFilter);
+    return paginateDemo(filtered, page, pageSize) as T;
+  }
+  if (path === '/admin/settings/audit') {
+    const categoryFilter = params.get('category');
+    if (categoryFilter) {
+      const filtered = demoAuditLogs.filter(l => l.category === categoryFilter);
+      return paginateDemo(filtered, page, pageSize) as T;
+    }
+    return paginateDemo(demoAuditLogs, page, pageSize) as T;
+  }
+
+  // Reviews
+  if (path === '/reviews') {
+    const statusFilter = params.get('status');
+    const categoryFilter = params.get('category');
+    let filtered = demoReviews;
+    if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+    if (categoryFilter) filtered = filtered.filter(r => r.category === categoryFilter);
+    return paginateDemo(filtered, page, pageSize) as T;
+  }
+  if (path === '/reviews/stats') {
+    return demoReviewStats as T;
+  }
+  if (path.match(/^\/reviews\/[\w-]+$/)) {
+    const id = path.split('/')[2];
+    return (demoReviewDetails[id] || demoReviewDetails['review-001']) as T;
+  }
+  // Review actions (complete, defer, skip)
+  if (path.match(/^\/reviews\/[\w-]+\/(complete|defer|skip)$/)) {
+    const id = path.split('/')[2];
+    const detail = demoReviewDetails[id] || demoReviewDetails['review-001'];
+    return { ...detail, status: 'completed' } as T;
+  }
+
+  // Approval decide action
+  if (path.match(/^\/approvals\/[\w-]+\/decide$/)) {
+    const id = path.split('/')[2];
+    const detail = demoApprovalDetails[id] || demoApprovalDetails['apr-001'];
+    return { ...detail, status: 'approved' } as T;
+  }
+
+  // Data source test connection
+  if (path.match(/^\/data-sources\/[\w-]+\/test$/)) {
+    return { success: true, message: 'Connection successful', latency_ms: 45 } as T;
+  }
+
+  // Agent task tool approvals
+  if (path.match(/^\/agents\/tasks\/[\w-]+\/tool-approvals$/)) {
+    const id = path.split('/')[3];
+    return (demoAgentTaskDetails[id] || demoAgentTaskDetails['task-001']) as T;
+  }
+
+  // Connector test
+  if (path.match(/^\/admin\/settings\/connectors\/[\w-]+\/test$/)) {
+    return { success: true, message: 'Connection test passed', latency_ms: 32 } as T;
   }
 
   // Default empty response for unmatched endpoints

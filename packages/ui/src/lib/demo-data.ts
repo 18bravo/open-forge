@@ -18,6 +18,16 @@ import type {
   AgentTaskSummary,
   AgentTask,
   PaginatedResponse,
+  PipelineSummary,
+  PipelineDetail,
+  PipelineRunSummary,
+  SystemSettings,
+  ConnectorSummary,
+  UserSummary,
+  AuditLogEntry,
+  ReviewItemSummary,
+  ReviewItem,
+  ReviewStats,
 } from './api';
 
 // =============================================================================
@@ -785,6 +795,224 @@ export const demoAgentTypes: AgentTypeSummary[] = [
     instance_count: 1,
   },
 ];
+
+// =============================================================================
+// Pipelines
+// =============================================================================
+
+export const demoPipelines: PipelineSummary[] = [
+  {
+    id: 'pipeline-001',
+    name: 'Customer Data Sync',
+    description: 'Daily sync of customer data from CRM to data warehouse',
+    status: 'active',
+    schedule: '0 2 * * *',
+    last_run: '2026-01-19T02:00:00Z',
+    last_run_status: 'completed',
+    next_run: '2026-01-20T02:00:00Z',
+  },
+  {
+    id: 'pipeline-002',
+    name: 'Product Catalog Update',
+    description: 'Hourly product inventory and pricing sync',
+    status: 'active',
+    schedule: '0 * * * *',
+    last_run: '2026-01-19T14:00:00Z',
+    last_run_status: 'completed',
+    next_run: '2026-01-19T15:00:00Z',
+  },
+  {
+    id: 'pipeline-003',
+    name: 'Analytics ETL',
+    description: 'Transform and load analytics data for reporting',
+    status: 'paused',
+    schedule: '0 4 * * *',
+    last_run: '2026-01-18T04:00:00Z',
+    last_run_status: 'failed',
+    next_run: null,
+  },
+  {
+    id: 'pipeline-004',
+    name: 'ML Model Refresh',
+    description: 'Retrain recommendation models with latest data',
+    status: 'active',
+    schedule: '0 0 * * 0',
+    last_run: '2026-01-14T00:00:00Z',
+    last_run_status: 'completed',
+    next_run: '2026-01-21T00:00:00Z',
+  },
+];
+
+export const demoPipelineDetails: Record<string, PipelineDetail> = {
+  'pipeline-001': {
+    id: 'pipeline-001',
+    name: 'Customer Data Sync',
+    description: 'Daily sync of customer data from CRM to data warehouse',
+    status: 'active',
+    schedule: '0 2 * * *',
+    last_run: '2026-01-19T02:00:00Z',
+    last_run_status: 'completed',
+    next_run: '2026-01-20T02:00:00Z',
+    created_at: '2025-06-15T10:00:00Z',
+    updated_at: '2026-01-19T02:45:00Z',
+    config: {
+      schedule: '0 2 * * *',
+      timeout_minutes: 60,
+      max_retries: 3,
+      concurrency: 2,
+    },
+    stages: [
+      { id: 'stage-001', name: 'Extract from CRM', order: 1, type: 'extract' },
+      { id: 'stage-002', name: 'Transform Data', order: 2, type: 'transform' },
+      { id: 'stage-003', name: 'Validate Schema', order: 3, type: 'validate' },
+      { id: 'stage-004', name: 'Load to Warehouse', order: 4, type: 'load' },
+    ],
+  },
+  'pipeline-002': {
+    id: 'pipeline-002',
+    name: 'Product Catalog Update',
+    description: 'Hourly product inventory and pricing sync',
+    status: 'active',
+    schedule: '0 * * * *',
+    last_run: '2026-01-19T14:00:00Z',
+    last_run_status: 'completed',
+    next_run: '2026-01-19T15:00:00Z',
+    created_at: '2025-08-01T08:00:00Z',
+    updated_at: '2026-01-19T14:15:00Z',
+    config: {
+      schedule: '0 * * * *',
+      timeout_minutes: 30,
+      max_retries: 2,
+      concurrency: 1,
+    },
+    stages: [
+      { id: 'stage-005', name: 'Fetch Product Data', order: 1, type: 'extract' },
+      { id: 'stage-006', name: 'Update Prices', order: 2, type: 'transform' },
+      { id: 'stage-007', name: 'Sync to Search', order: 3, type: 'load' },
+    ],
+  },
+};
+
+export const demoPipelineRuns: PipelineRunSummary[] = [
+  { id: 'run-001', pipeline_id: 'pipeline-001', pipeline_name: 'Customer Data Sync', run_number: 156, status: 'completed', started_at: '2026-01-19T02:00:00Z', completed_at: '2026-01-19T02:45:00Z', duration_seconds: 2700, triggered_by: 'schedule' },
+  { id: 'run-002', pipeline_id: 'pipeline-002', pipeline_name: 'Product Catalog Update', run_number: 3842, status: 'completed', started_at: '2026-01-19T14:00:00Z', completed_at: '2026-01-19T14:12:00Z', duration_seconds: 720, triggered_by: 'schedule' },
+  { id: 'run-003', pipeline_id: 'pipeline-003', pipeline_name: 'Analytics ETL', run_number: 89, status: 'failed', started_at: '2026-01-18T04:00:00Z', completed_at: '2026-01-18T04:32:00Z', duration_seconds: 1920, triggered_by: 'schedule' },
+  { id: 'run-004', pipeline_id: 'pipeline-001', pipeline_name: 'Customer Data Sync', run_number: 155, status: 'completed', started_at: '2026-01-18T02:00:00Z', completed_at: '2026-01-18T02:42:00Z', duration_seconds: 2520, triggered_by: 'schedule' },
+  { id: 'run-005', pipeline_id: 'pipeline-004', pipeline_name: 'ML Model Refresh', run_number: 12, status: 'running', started_at: '2026-01-19T14:30:00Z', completed_at: null, duration_seconds: null, triggered_by: 'manual' },
+];
+
+// =============================================================================
+// Settings - System
+// =============================================================================
+
+export const demoSystemSettings: SystemSettings = {
+  instance_name: 'Open Forge Demo',
+  instance_url: 'https://demo.openforge.io',
+  admin_email: 'admin@openforge.io',
+  session_timeout_minutes: 60,
+  require_mfa: true,
+  allow_self_registration: false,
+  default_user_role: 'viewer',
+};
+
+// =============================================================================
+// Settings - Connectors
+// =============================================================================
+
+export const demoConnectors: ConnectorSummary[] = [
+  { id: 'conn-001', name: 'Production PostgreSQL', type: 'database', provider: 'PostgreSQL', status: 'active', last_tested: '2026-01-19T14:00:00Z', last_test_success: true },
+  { id: 'conn-002', name: 'Salesforce CRM', type: 'api', provider: 'Salesforce', status: 'active', last_tested: '2026-01-19T13:30:00Z', last_test_success: true },
+  { id: 'conn-003', name: 'AWS S3 Data Lake', type: 'file_storage', provider: 'AWS S3', status: 'active', last_tested: '2026-01-19T12:00:00Z', last_test_success: true },
+  { id: 'conn-004', name: 'Kafka Event Stream', type: 'message_queue', provider: 'Apache Kafka', status: 'active', last_tested: '2026-01-19T14:15:00Z', last_test_success: true },
+  { id: 'conn-005', name: 'Snowflake Warehouse', type: 'database', provider: 'Snowflake', status: 'error', last_tested: '2026-01-19T10:00:00Z', last_test_success: false },
+  { id: 'conn-006', name: 'Azure Blob Storage', type: 'cloud_service', provider: 'Azure', status: 'inactive', last_tested: null, last_test_success: null },
+];
+
+// =============================================================================
+// Settings - Users
+// =============================================================================
+
+export const demoUsers: UserSummary[] = [
+  { id: 'user-001', name: 'John Admin', email: 'john.admin@company.com', role: 'admin', status: 'active', last_login: '2026-01-19T14:30:00Z', mfa_enabled: true, created_at: '2025-01-15T10:00:00Z' },
+  { id: 'user-002', name: 'Sarah Editor', email: 'sarah.editor@company.com', role: 'editor', status: 'active', last_login: '2026-01-19T11:00:00Z', mfa_enabled: true, created_at: '2025-03-20T09:00:00Z' },
+  { id: 'user-003', name: 'Mike Viewer', email: 'mike.viewer@company.com', role: 'viewer', status: 'active', last_login: '2026-01-18T16:00:00Z', mfa_enabled: false, created_at: '2025-06-10T14:00:00Z' },
+  { id: 'user-004', name: 'API Service Account', email: 'api@company.com', role: 'api', status: 'active', last_login: '2026-01-19T14:35:00Z', mfa_enabled: false, created_at: '2025-02-01T08:00:00Z' },
+  { id: 'user-005', name: 'Jane Pending', email: 'jane.pending@company.com', role: 'viewer', status: 'pending', last_login: null, mfa_enabled: false, created_at: '2026-01-19T12:00:00Z' },
+];
+
+// =============================================================================
+// Settings - Audit Logs
+// =============================================================================
+
+export const demoAuditLogs: AuditLogEntry[] = [
+  { id: 'audit-001', timestamp: '2026-01-19T14:35:00Z', action: 'user.login', category: 'auth', actor: 'john.admin@company.com', actor_type: 'user', resource_type: 'session', resource_id: 'sess-123', details: { method: 'password', mfa: true }, ip_address: '192.168.1.100' },
+  { id: 'audit-002', timestamp: '2026-01-19T14:30:00Z', action: 'engagement.update', category: 'data', actor: 'sarah.editor@company.com', actor_type: 'user', resource_type: 'engagement', resource_id: 'eng-001', details: { field: 'status', old: 'pending', new: 'in_progress' }, ip_address: '192.168.1.101' },
+  { id: 'audit-003', timestamp: '2026-01-19T14:15:00Z', action: 'pipeline.trigger', category: 'pipeline', actor: 'Data Integration Agent', actor_type: 'agent', resource_type: 'pipeline', resource_id: 'pipeline-001', details: { trigger: 'schedule' }, ip_address: null },
+  { id: 'audit-004', timestamp: '2026-01-19T14:00:00Z', action: 'settings.update', category: 'config', actor: 'john.admin@company.com', actor_type: 'user', resource_type: 'system_settings', resource_id: 'settings', details: { field: 'session_timeout_minutes', old: 30, new: 60 }, ip_address: '192.168.1.100' },
+  { id: 'audit-005', timestamp: '2026-01-19T13:45:00Z', action: 'agent.task.complete', category: 'agent', actor: 'Discovery Agent', actor_type: 'agent', resource_type: 'task', resource_id: 'task-002', details: { iterations: 8, status: 'completed' }, ip_address: null },
+  { id: 'audit-006', timestamp: '2026-01-19T13:30:00Z', action: 'user.create', category: 'user', actor: 'john.admin@company.com', actor_type: 'user', resource_type: 'user', resource_id: 'user-005', details: { email: 'jane.pending@company.com', role: 'viewer' }, ip_address: '192.168.1.100' },
+];
+
+// =============================================================================
+// Reviews
+// =============================================================================
+
+export const demoReviews: ReviewItemSummary[] = [
+  { id: 'review-001', title: 'Schema mapping validation for Customer entity', category: 'mapping', priority: 2, status: 'queued', created_at: '2026-01-19T14:00:00Z', assigned_to: null },
+  { id: 'review-002', title: 'Data quality check - missing values in OrderDate', category: 'data_quality', priority: 1, status: 'in_review', created_at: '2026-01-19T13:30:00Z', assigned_to: 'sarah.editor@company.com' },
+  { id: 'review-003', title: 'Agent output review - entity extraction results', category: 'agent_output', priority: 3, status: 'queued', created_at: '2026-01-19T12:00:00Z', assigned_to: null },
+  { id: 'review-004', title: 'Configuration change - pipeline schedule update', category: 'configuration', priority: 4, status: 'completed', created_at: '2026-01-18T16:00:00Z', assigned_to: 'john.admin@company.com' },
+  { id: 'review-005', title: 'Data quality alert - duplicate records detected', category: 'data_quality', priority: 1, status: 'deferred', created_at: '2026-01-18T10:00:00Z', assigned_to: 'sarah.editor@company.com' },
+];
+
+export const demoReviewDetails: Record<string, ReviewItem> = {
+  'review-001': {
+    id: 'review-001',
+    title: 'Schema mapping validation for Customer entity',
+    category: 'mapping',
+    priority: 2,
+    status: 'queued',
+    created_at: '2026-01-19T14:00:00Z',
+    assigned_to: null,
+    description: 'The schema mapping agent has proposed field mappings for the Customer entity. Please review and validate the suggested mappings before they are applied to the target schema.',
+    context_data: { source_table: 'raw_customers', target_entity: 'Customer', proposed_mappings: 12, confidence_score: 0.87 },
+    engagement_id: 'eng-001',
+    created_by: 'Schema Mapping Agent',
+  },
+  'review-002': {
+    id: 'review-002',
+    title: 'Data quality check - missing values in OrderDate',
+    category: 'data_quality',
+    priority: 1,
+    status: 'in_review',
+    created_at: '2026-01-19T13:30:00Z',
+    assigned_to: 'sarah.editor@company.com',
+    description: 'Data quality validation detected 3.2% of records with missing OrderDate values. This exceeds the configured threshold of 1%. Please review and decide on remediation.',
+    context_data: { total_records: 125000, missing_count: 4000, threshold: 0.01, actual_rate: 0.032 },
+    engagement_id: 'eng-001',
+    created_by: 'Data Quality Agent',
+  },
+  'review-003': {
+    id: 'review-003',
+    title: 'Agent output review - entity extraction results',
+    category: 'agent_output',
+    priority: 3,
+    status: 'queued',
+    created_at: '2026-01-19T12:00:00Z',
+    assigned_to: null,
+    description: 'The discovery agent has identified potential entities from the source data. Review the extracted entities and relationships before adding them to the ontology.',
+    context_data: { entities_found: 8, relationships_found: 12, source: 'supply_chain_data' },
+    engagement_id: 'eng-002',
+    created_by: 'Discovery Agent',
+  },
+};
+
+export const demoReviewStats: ReviewStats = {
+  queued: 2,
+  in_review: 1,
+  completed_today: 5,
+  avg_review_time_minutes: 12,
+};
 
 // =============================================================================
 // Helper to create paginated responses

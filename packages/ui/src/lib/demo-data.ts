@@ -13,6 +13,7 @@ import type {
   ActivityItem,
   DashboardMetrics,
   AgentClusterSummary,
+  AgentTypeSummary,
   AgentTaskSummary,
   AgentTask,
   PaginatedResponse,
@@ -575,6 +576,67 @@ export const demoAgentTaskDetails: Record<string, AgentTask> = {
     started_at: '2026-01-19T12:15:00Z',
   },
 };
+
+// =============================================================================
+// Agent Types
+// =============================================================================
+
+export const demoAgentTypes: AgentTypeSummary[] = [
+  {
+    id: 'agent-type-001',
+    name: 'Schema Discovery Agent',
+    cluster: 'discovery',
+    status: 'active',
+    task_type: 'schema_discovery',
+    version: '2.1.0',
+    instance_count: 2,
+  },
+  {
+    id: 'agent-type-002',
+    name: 'Data Quality Agent',
+    cluster: 'discovery',
+    status: 'active',
+    task_type: 'data_quality',
+    version: '1.8.2',
+    instance_count: 2,
+  },
+  {
+    id: 'agent-type-003',
+    name: 'Ontology Builder Agent',
+    cluster: 'data-architect',
+    status: 'active',
+    task_type: 'ontology_build',
+    version: '3.0.1',
+    instance_count: 1,
+  },
+  {
+    id: 'agent-type-004',
+    name: 'Schema Mapping Agent',
+    cluster: 'data-architect',
+    status: 'active',
+    task_type: 'schema_mapping',
+    version: '2.4.0',
+    instance_count: 2,
+  },
+  {
+    id: 'agent-type-005',
+    name: 'App Builder Agent',
+    cluster: 'app-builder',
+    status: 'inactive',
+    task_type: 'app_generation',
+    version: '1.2.0',
+    instance_count: 0,
+  },
+  {
+    id: 'agent-type-006',
+    name: 'Report Generator Agent',
+    cluster: 'app-builder',
+    status: 'active',
+    task_type: 'report_generation',
+    version: '1.5.3',
+    instance_count: 1,
+  },
+];
 
 // =============================================================================
 // Helper to create paginated responses

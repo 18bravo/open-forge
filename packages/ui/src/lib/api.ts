@@ -13,6 +13,7 @@ import {
   demoActivities,
   demoDashboardMetrics,
   demoAgentClusters,
+  demoAgentTypes,
   demoAgentTasks,
   demoAgentTaskDetails,
   demoSystemHealth,
@@ -316,6 +317,11 @@ function getDemoResponse<T>(endpoint: string): T {
   // Agent clusters
   if (path === '/admin/agents/clusters') {
     return paginateDemo(demoAgentClusters, page, pageSize) as T;
+  }
+
+  // Agent types
+  if (path === '/admin/agents/types') {
+    return demoAgentTypes as T;
   }
 
   // Agent tasks - check for engagement filter

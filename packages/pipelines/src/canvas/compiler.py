@@ -23,6 +23,8 @@ from dagster import (
 )
 import polars as pl
 
+from pipelines.utils.safe_expression import parse_safe_expression, ExpressionParseError
+
 logger = logging.getLogger(__name__)
 
 
@@ -602,9 +604,12 @@ class PipelineCanvasCompiler:
             return df
 
         try:
-            # Parse and apply filter expression
-            # Note: In production, use a safer expression parser
-            return df.filter(eval(expression))
+            # Parse expression safely without using eval()
+            filter_expr = parse_safe_expression(expression)
+            return df.filter(filter_expr)
+        except ExpressionParseError as e:
+            context.log.error(f"Invalid filter expression: {e}")
+            return df
         except Exception as e:
             context.log.error(f"Filter failed: {e}")
             return df

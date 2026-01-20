@@ -348,12 +348,12 @@ export const demoDashboardMetrics: DashboardMetrics = {
 
 export const demoSystemHealth = {
   services: [
-    { name: 'API Server', status: 'healthy' as const, latency_ms: 45, last_check: '2026-01-19T14:30:00Z' },
-    { name: 'Database (PostgreSQL)', status: 'healthy' as const, latency_ms: 12, last_check: '2026-01-19T14:30:00Z' },
-    { name: 'Cache (Redis)', status: 'healthy' as const, latency_ms: 2, last_check: '2026-01-19T14:30:00Z' },
-    { name: 'Message Queue (Kafka)', status: 'healthy' as const, latency_ms: 8, last_check: '2026-01-19T14:30:00Z' },
-    { name: 'Agent Orchestrator', status: 'healthy' as const, latency_ms: 23, last_check: '2026-01-19T14:30:00Z' },
-    { name: 'ML Pipeline Service', status: 'degraded' as const, latency_ms: 450, last_check: '2026-01-19T14:30:00Z' },
+    { service: 'API Server', status: 'healthy' as const, latency: 45, uptime: 99.98 },
+    { service: 'Database (PostgreSQL)', status: 'healthy' as const, latency: 12, uptime: 99.99 },
+    { service: 'Cache (Redis)', status: 'healthy' as const, latency: 2, uptime: 99.95 },
+    { service: 'Message Queue (Kafka)', status: 'healthy' as const, latency: 8, uptime: 99.97 },
+    { service: 'Agent Orchestrator', status: 'healthy' as const, latency: 23, uptime: 99.92 },
+    { service: 'ML Pipeline Service', status: 'degraded' as const, latency: 450, uptime: 98.50 },
   ],
   overall_status: 'degraded' as const,
   timestamp: '2026-01-19T14:30:00Z',

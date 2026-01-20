@@ -154,8 +154,8 @@ export function MetricsChart({
       </div>
 
       {/* Chart */}
-      <div style={{ height }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ height, minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <ChartComponent
             data={data}
             margin={{ top: 10, right: 30, left: 0, bottom: 0 }}

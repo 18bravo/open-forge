@@ -2,11 +2,14 @@
 GraphQL API connector for Open Forge.
 Provides async GraphQL client for data sources.
 """
+import logging
 import time
 from typing import Any, Dict, List, Optional
 
 import httpx
 from pydantic import Field
+
+logger = logging.getLogger(__name__)
 
 from connectors.base import (
     BaseConnector,
@@ -420,8 +423,8 @@ class GraphQLConnector(BaseConnector):
                         rows=items[:limit],
                         sample_size=len(items[:limit])
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to infer schema from query for %s: %s", source, e)
 
             # Return empty sample if unable to query
             return SampleData(

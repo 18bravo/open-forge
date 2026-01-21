@@ -3,7 +3,11 @@ Event-driven sensors for Open Forge.
 
 Monitors Redis event streams to trigger downstream pipelines.
 """
+import json
+import logging
+from datetime import datetime
 from typing import Dict, List, Optional
+
 from dagster import (
     sensor,
     SensorEvaluationContext,
@@ -11,8 +15,8 @@ from dagster import (
     SkipReason,
     DefaultSensorStatus,
 )
-import json
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 @sensor(
@@ -215,6 +219,7 @@ def pipeline_completion_sensor(
                 try:
                     await redis.xgroup_create(stream_name, consumer_group, mkstream=True)
                 except Exception:
+                    # Group already exists, which is expected
                     pass
 
                 messages = await redis.xreadgroup(
@@ -238,8 +243,8 @@ def pipeline_completion_sensor(
                                         "payload": event_data.get("payload", {}),
                                     })
                                     await redis.xack(stream_name, consumer_group, message_id)
-                            except json.JSONDecodeError:
-                                pass
+                            except json.JSONDecodeError as e:
+                                logger.warning("Failed to decode event message %s: %s", message_id, e)
 
             return events
 

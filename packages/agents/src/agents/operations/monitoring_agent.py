@@ -7,7 +7,10 @@ and alerting rules based on ontology entities and system requirements.
 from typing import Any, Dict, List, Optional, Type
 from datetime import datetime
 import json
+import logging
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -498,8 +501,8 @@ Also output an entity_metrics_map that maps ontology entities to their metrics:
             yaml_blocks = self._extract_yaml_blocks(content)
             if yaml_blocks:
                 return yaml_blocks[0] if len(yaml_blocks) == 1 else {"configs": yaml_blocks}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to parse Prometheus config: %s", e)
         return {"raw_config": content}
 
     def _parse_grafana_dashboards(self, content: str) -> List[Dict[str, Any]]:
@@ -510,8 +513,8 @@ Also output an entity_metrics_map that maps ontology entities to their metrics:
             for block in json_blocks:
                 if "title" in block or "panels" in block:
                     dashboards.append(block)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to parse Grafana dashboards: %s", e)
 
         if not dashboards:
             dashboards = [{"raw_content": content}]
@@ -528,7 +531,8 @@ Also output an entity_metrics_map that maps ontology entities to their metrics:
                 elif "rules" in block:
                     rules.append(block)
             return rules if rules else [{"raw_config": content}]
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to parse alerting rules: %s", e)
             return [{"raw_config": content}]
 
     def _extract_entity_metrics_map(self, content: str) -> Dict[str, Any]:
@@ -564,8 +568,8 @@ Also output an entity_metrics_map that maps ontology entities to their metrics:
                 parsed = yaml.safe_load(content)
                 if parsed and isinstance(parsed, dict):
                     blocks.append(parsed)
-            except yaml.YAMLError:
-                pass
+            except yaml.YAMLError as e:
+                logger.debug("Failed to parse content as YAML: %s", e)
 
         return blocks
 

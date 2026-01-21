@@ -9,7 +9,7 @@ from datetime import datetime
 import re
 import json
 
-from jinja2 import Template
+from jinja2 import Environment, BaseLoader, select_autoescape
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
@@ -267,14 +267,20 @@ class UIGeneratorAgent(BaseOpenForgeAgent):
     ):
         super().__init__(llm, memory, config)
 
-        # Initialize Jinja2 templates
-        self._form_template = Template(FORM_TEMPLATE)
-        self._table_template = Template(TABLE_TEMPLATE)
-        self._dashboard_template = Template(DASHBOARD_TEMPLATE)
-        self._types_template = Template(TYPES_TEMPLATE)
-        self._hooks_template = Template(HOOKS_TEMPLATE)
-        self._api_template = Template(API_CLIENT_TEMPLATE)
-        self._zod_template = Template(ZOD_SCHEMA_TEMPLATE)
+        # Initialize Jinja2 environment with autoescape enabled for security
+        self._jinja_env = Environment(
+            loader=BaseLoader(),
+            autoescape=select_autoescape(default=True, default_for_string=True)
+        )
+
+        # Initialize Jinja2 templates with secure environment
+        self._form_template = self._jinja_env.from_string(FORM_TEMPLATE)
+        self._table_template = self._jinja_env.from_string(TABLE_TEMPLATE)
+        self._dashboard_template = self._jinja_env.from_string(DASHBOARD_TEMPLATE)
+        self._types_template = self._jinja_env.from_string(TYPES_TEMPLATE)
+        self._hooks_template = self._jinja_env.from_string(HOOKS_TEMPLATE)
+        self._api_template = self._jinja_env.from_string(API_CLIENT_TEMPLATE)
+        self._zod_template = self._jinja_env.from_string(ZOD_SCHEMA_TEMPLATE)
 
     @property
     def name(self) -> str:

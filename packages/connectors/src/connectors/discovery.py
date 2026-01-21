@@ -11,6 +11,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+import logging
+
 from connectors.base import (
     BaseConnector,
     ConnectorConfig,
@@ -19,6 +21,8 @@ from connectors.base import (
     SampleData,
     SchemaField,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class DataType(str, Enum):
@@ -261,8 +265,8 @@ class DataDiscovery:
                 {"value": v, "count": c, "percentage": round(c / total_count * 100, 2)}
                 for v, c in top_values
             ]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to calculate top values for field %s: %s", field.name, e)
 
         # Sample values
         stats.sample_values = non_null_values[:5]
@@ -334,8 +338,8 @@ class DataDiscovery:
                 variance = sum((x - mean) ** 2 for x in numeric_values) / len(numeric_values)
                 stats.std_dev = round(variance ** 0.5, 4)
 
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as e:
+            logger.debug("Failed to calculate numeric stats: %s", e)
 
         return stats
 
@@ -355,8 +359,8 @@ class DataDiscovery:
             stats.max_length = max(lengths)
             stats.avg_length = round(sum(lengths) / len(lengths), 2)
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to calculate string stats: %s", e)
 
         return stats
 

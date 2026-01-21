@@ -20,12 +20,13 @@ export function DemoLinkInterceptor({ children }: { children: ReactNode }) {
       const href = link.getAttribute('href');
       if (!href) return;
 
-      // Skip external links, hash links, and already-demo links
+      // Skip external links, hash links, already-demo links, and root path (exit demo)
       if (
         href.startsWith('http') ||
         href.startsWith('#') ||
         href.startsWith('/demo') ||
-        href.startsWith('mailto:')
+        href.startsWith('mailto:') ||
+        href === '/'
       ) {
         return;
       }

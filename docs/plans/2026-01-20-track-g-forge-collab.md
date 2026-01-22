@@ -9,16 +9,16 @@
 
 ## Executive Summary
 
-Track G implements collaboration capabilities for Open Forge, providing fine-grained sharing permissions, curated collections, real-time alerts, and comprehensive audit logging. This track addresses the ~10+ collaboration features present in Palantir Foundry that enable enterprise teamwork.
+Track G implements collaboration capabilities for Open Forge, providing fine-grained sharing permissions, curated collections, real-time alerts, and comprehensive audit logging. This track addresses ~10+ collaboration features that enable enterprise teamwork.
 
 ### Key Packages
 
-| Package | Purpose | Palantir Equivalent |
-|---------|---------|---------------------|
-| `forge-sharing` | Permissions & access control | Access Management |
-| `forge-collections` | Curated asset collections | Folders & Projects |
-| `forge-alerts` | Notifications & subscriptions | Alerts |
-| `forge-audit` | Audit logging & compliance | Audit Logs |
+| Package | Purpose |
+|---------|---------|
+| `forge-sharing` | Permissions & access control |
+| `forge-collections` | Curated asset collections |
+| `forge-alerts` | Notifications & subscriptions |
+| `forge-audit` | Audit logging & compliance |
 
 ---
 

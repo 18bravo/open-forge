@@ -1,14 +1,16 @@
-# Open Forge Platform Architecture: Full Palantir Parity
+# Open Forge Platform Architecture: Enterprise Data Platform
 
 **Date:** 2026-01-20
-**Status:** Approved
-**Goal:** Achieve feature parity with Palantir AIP + Foundry platforms
+**Status:** Superseded (See 2026-01-21-consolidated-architecture.md)
+**Goal:** Comprehensive enterprise data platform with AI capabilities
 
 ---
 
 ## Executive Summary
 
-This document defines the complete architecture for Open Forge to achieve feature parity with Palantir's AIP and Foundry platforms. The design encompasses 64 packages across 8 development tracks, enabling parallel development by specialized subagents.
+This document defines the complete architecture for Open Forge as an enterprise-grade data platform. The original design encompasses 64 packages across 8 development tracks, enabling parallel development by specialized subagents.
+
+**Note:** This architecture has been superseded by the consolidated 20-package architecture in `2026-01-21-consolidated-architecture.md`.
 
 ### Key Decisions
 
@@ -16,32 +18,32 @@ This document defines the complete architecture for Open Forge to achieve featur
 2. **Ontology-First** - All apps built around LinkML ontology objects
 3. **Separate Packages** - Clean separation for parallel development
 4. **Hybrid Patterns** - Block + Grid layouts, Direct + Query data binding
-5. **Unique Branding** - All products named with "Forge" prefix to differentiate from Palantir
+5. **Unique Branding** - All products named with "Forge" prefix
 
 ---
 
-## Product Naming
+## Product Suite
 
-| Palantir Product | Open Forge Name | Description |
-|------------------|-----------------|-------------|
-| Foundry | **Forge** | Core platform |
-| Workshop | **Forge Studio** | Low-code app builder |
-| Slate | **Forge Canvas** | Full-code app builder |
-| Quiver | **Forge Lens** | Object-driven analysis |
-| Contour | **Forge Prism** | Large-scale tabular analysis |
-| Map | **Forge Atlas** | Geospatial visualization |
-| Notepad | **Forge Scribe** | Rich text reporting |
-| Carbon | **Forge Hub** | Workspace management |
-| Compass | **Forge Navigator** | Data catalog & discovery |
-| Object Explorer | **Forge Browser** | Object search & exploration |
-| Apollo | **Forge Orbit** | Continuous delivery platform |
-| Marketplace | **Forge Exchange** | Pre-built solutions |
-| AIP | **Forge AI** | AI platform umbrella |
-| AIP Logic | **Forge Logic** | No-code LLM functions |
-| AIP Assist | **Forge Copilot** | AI assistant |
-| AIP Agent Studio | **Forge Agent Builder** | Visual agent creation |
-| AIP Evals | **Forge Evaluate** | LLM testing framework |
-| AIP Automate | **Forge Automate** | Workflow automation |
+| Product | Description |
+|---------|-------------|
+| **Forge** | Core platform |
+| **Forge Studio** | Low-code app builder |
+| **Forge Canvas** | Full-code app builder |
+| **Forge Lens** | Object-driven analysis |
+| **Forge Prism** | Large-scale tabular analysis |
+| **Forge Atlas** | Geospatial visualization |
+| **Forge Scribe** | Rich text reporting |
+| **Forge Hub** | Workspace management |
+| **Forge Navigator** | Data catalog & discovery |
+| **Forge Browser** | Object search & exploration |
+| **Forge Orbit** | Continuous delivery platform |
+| **Forge Exchange** | Pre-built solutions |
+| **Forge AI** | AI platform umbrella |
+| **Forge Logic** | No-code LLM functions |
+| **Forge Copilot** | AI assistant |
+| **Forge Agent Builder** | Visual agent creation |
+| **Forge Evaluate** | LLM testing framework |
+| **Forge Automate** | Workflow automation |
 
 ---
 
@@ -906,9 +908,9 @@ packages/forge-edge/
 
 ---
 
-## Appendix: Gap Analysis Reference
+## Appendix: Feature Coverage Reference
 
-This architecture was designed to close the following gaps with Palantir:
+This architecture was designed to provide comprehensive enterprise data platform capabilities:
 
 - **193+ Connectors** → Track A
 - **20+ AI/ML Features** → Track C

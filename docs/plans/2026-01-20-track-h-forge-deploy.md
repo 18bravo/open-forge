@@ -9,16 +9,16 @@
 
 ## Executive Summary
 
-Track H implements deployment and distribution capabilities for Open Forge, providing continuous delivery, marketplace functionality, edge deployment, and public-facing consumer apps. This track addresses the ~10+ deployment features present in Palantir Foundry that enable production operations.
+Track H implements deployment and distribution capabilities for Open Forge, providing continuous delivery, marketplace functionality, edge deployment, and public-facing consumer apps. This track addresses ~10+ deployment features that enable production operations.
 
 ### Key Packages
 
-| Package | Purpose | Palantir Equivalent |
-|---------|---------|---------------------|
-| `forge-orbit` | Continuous delivery platform | Apollo |
-| `forge-exchange` | Marketplace for solutions | Marketplace |
-| `forge-edge` | Edge/offline deployment | Edge Deployment |
-| `forge-consumer` | Public-facing apps | Consumer Apps |
+| Package | Purpose |
+|---------|---------|
+| `forge-orbit` | Continuous delivery platform |
+| `forge-exchange` | Marketplace for solutions |
+| `forge-edge` | Edge/offline deployment |
+| `forge-consumer` | Public-facing apps |
 
 ---
 

@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "forge-ai"
+version = "0.1.0"
+description = "Unified AI package for Open Forge - Multi-LLM core, Logic, Context, and Security"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+keywords = ["ai", "llm", "forge", "agents", "security"]
+authors = [
+    { name = "Open Forge Team" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "litellm>=1.30",
+    "pydantic>=2.0",
+    "anthropic>=0.18",
+    "openai>=1.0",
+    "structlog>=24.0",
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "mypy>=1.8",
+    "ruff>=0.3",
+]
+# Optional: sentence-transformers for local semantic analysis
+semantic = [
+    "sentence-transformers>=2.2",
+    "torch>=2.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/open-forge/open-forge#readme"
+Issues = "https://github.com/open-forge/open-forge/issues"
+Source = "https://github.com/open-forge/open-forge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/forge_ai"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]

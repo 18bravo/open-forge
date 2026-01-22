@@ -1,0 +1,72 @@
+{
+  "name": "@open-forge/forge-geo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Geospatial capabilities for Open Forge: map visualization with Mapbox/deck.gl",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./atlas": {
+      "import": "./dist/atlas/index.mjs",
+      "require": "./dist/atlas/index.js",
+      "types": "./dist/atlas/index.d.ts"
+    },
+    "./layers": {
+      "import": "./dist/atlas/layers/index.mjs",
+      "require": "./dist/atlas/layers/index.js",
+      "types": "./dist/atlas/layers/index.d.ts"
+    },
+    "./controls": {
+      "import": "./dist/atlas/controls/index.mjs",
+      "require": "./dist/atlas/controls/index.js",
+      "types": "./dist/atlas/controls/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "lint": "eslint src --ext .ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@deck.gl/core": "^9.0.0",
+    "@deck.gl/layers": "^9.0.0",
+    "@deck.gl/aggregation-layers": "^9.0.0",
+    "@deck.gl/mapbox": "^9.0.0",
+    "mapbox-gl": "^3.3.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "supercluster": "^8.0.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.0",
+    "@testing-library/react": "^14.2.0",
+    "@testing-library/user-event": "^14.5.0",
+    "@types/mapbox-gl": "^3.1.0",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/supercluster": "^7.1.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^24.0.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  }
+}

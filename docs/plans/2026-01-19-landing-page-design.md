@@ -8,7 +8,7 @@
 
 ## Overview
 
-Landing page for Open Forge, positioned as the open-source alternative to Palantir's enterprise data platform. The page targets three audiences with distinct value propositions while maintaining a cohesive anti-vendor-lock-in narrative.
+Landing page for Open Forge, an open-source enterprise data platform. The page targets three audiences with distinct value propositions while maintaining a cohesive anti-vendor-lock-in narrative.
 
 ### Target Audiences
 

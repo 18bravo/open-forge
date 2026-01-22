@@ -9,21 +9,21 @@
 
 ## Executive Summary
 
-Track B implements the data platform layer for Open Forge, providing data quality monitoring, lineage tracking, data versioning (branches), a unified data catalog (Navigator), and federated query capabilities. This track addresses the ~40+ data management features present in Palantir Foundry that are currently absent from Open Forge.
+Track B implements the data platform layer for Open Forge, providing data quality monitoring, lineage tracking, data versioning (branches), a unified data catalog (Navigator), and federated query capabilities. This track addresses ~40+ data management features for enterprise data governance.
 
 ### Key Packages
 
-| Package | Purpose | Palantir Equivalent |
-|---------|---------|---------------------|
-| `forge-quality` | Data health monitoring & checks | Data Health, SLAs |
-| `forge-lineage` | End-to-end data lineage | Column-level Lineage |
-| `forge-branches` | Git-like data versioning | Dataset Branching |
-| `forge-navigator` | Data catalog & discovery | Compass, Data Catalog |
-| `forge-federation` | Cross-source virtual tables | Federated Queries |
-| `transforms-core` | Transform framework | Pipeline Builder |
-| `transforms-spark` | Apache Spark transforms | Spark Integration |
-| `transforms-flink` | Streaming transforms | Real-time Pipelines |
-| `transforms-datafusion` | Fast Rust-based transforms | N/A (innovation) |
+| Package | Purpose |
+|---------|---------|
+| `forge-quality` | Data health monitoring & checks |
+| `forge-lineage` | End-to-end data lineage |
+| `forge-branches` | Git-like data versioning |
+| `forge-navigator` | Data catalog & discovery |
+| `forge-federation` | Cross-source virtual tables |
+| `transforms-core` | Transform framework |
+| `transforms-spark` | Apache Spark transforms |
+| `transforms-flink` | Streaming transforms |
+| `transforms-datafusion` | Fast Rust-based transforms |
 
 ---
 

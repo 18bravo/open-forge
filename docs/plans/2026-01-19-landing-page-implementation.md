@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build forge.overlordai.ai landing page positioned as the open-source Palantir alternative with Three.js animations
+**Goal:** Build forge.overlordai.ai landing page for the open-source enterprise data platform with Three.js animations
 
 **Architecture:** Next.js App Router with route group `(marketing)` for landing pages. Static content with client-side Three.js animations using react-three-fiber. Tailwind CSS with violet/purple theme matching OverlordAI brand.
 

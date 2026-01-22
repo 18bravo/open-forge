@@ -9,17 +9,17 @@
 
 ## Executive Summary
 
-Track F implements comprehensive media processing capabilities for Open Forge, enabling document extraction, OCR, image analysis, video processing, and audio transcription. This track addresses the ~15+ media features present in Palantir Foundry that enable unstructured data processing.
+Track F implements comprehensive media processing capabilities for Open Forge, enabling document extraction, OCR, image analysis, video processing, and audio transcription. This track addresses ~15+ media features that enable unstructured data processing.
 
 ### Key Packages
 
-| Package | Purpose | Palantir Equivalent |
-|---------|---------|---------------------|
-| `forge-media-core` | Media storage & management | Media Sets |
-| `forge-documents` | PDF, DOCX, XLSX extraction | Document Service |
-| `forge-vision` | OCR, image analysis | Vision Service |
-| `forge-voice` | Transcription, diarization | Speech Service |
-| `forge-video` | Video processing, frames | Video Analytics |
+| Package | Purpose |
+|---------|---------|
+| `forge-media-core` | Media storage & management |
+| `forge-documents` | PDF, DOCX, XLSX extraction |
+| `forge-vision` | OCR, image analysis |
+| `forge-voice` | Transcription, diarization |
+| `forge-video` | Video processing, frames |
 
 ---
 

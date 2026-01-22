@@ -9,16 +9,16 @@
 
 ## Executive Summary
 
-Track E implements geospatial capabilities for Open Forge, providing map visualization, spatial queries, movement tracking, and network analysis. This track addresses the ~12+ geospatial features present in Palantir Foundry that enable location-based analytics.
+Track E implements geospatial capabilities for Open Forge, providing map visualization, spatial queries, movement tracking, and network analysis. This track addresses ~12+ geospatial features that enable location-based analytics.
 
 ### Key Packages
 
-| Package | Purpose | Palantir Equivalent |
-|---------|---------|---------------------|
-| `forge-geo-core` | Spatial primitives & queries | Geo Core |
-| `forge-atlas` | Map visualization app | Palantir Maps |
-| `forge-tracks` | Movement & trajectory analysis | Object Tracking |
-| `forge-routes` | Network & routing analysis | Network Analysis |
+| Package | Purpose |
+|---------|---------|
+| `forge-geo-core` | Spatial primitives & queries |
+| `forge-atlas` | Map visualization app |
+| `forge-tracks` | Movement & trajectory analysis |
+| `forge-routes` | Network & routing analysis |
 
 ---
 

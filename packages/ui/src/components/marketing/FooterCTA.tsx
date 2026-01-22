@@ -2,12 +2,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Github, BookOpen, Mail, ExternalLink } from 'lucide-react';
 
+type IconComponent = React.ComponentType<{ className?: string }>;
+
 interface CtaCard {
   title: string;
   description: string;
   cta: string;
   href: string;
-  icon: React.ElementType;
+  icon: IconComponent;
 }
 
 interface FooterLink {

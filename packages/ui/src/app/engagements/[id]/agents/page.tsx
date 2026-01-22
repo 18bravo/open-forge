@@ -53,8 +53,9 @@ export default function AgentsPage({ params }: AgentsPageProps) {
 
   // Auto-select first task when data loads
   React.useEffect(() => {
-    if (tasks.length > 0 && !selectedTaskId) {
-      setSelectedTaskId(tasks[0].id);
+    const firstTask = tasks[0];
+    if (tasks.length > 0 && !selectedTaskId && firstTask) {
+      setSelectedTaskId(firstTask.id);
     }
   }, [tasks, selectedTaskId]);
 
@@ -422,7 +423,7 @@ function MessageBubble({ message }: { message: AgentMessage }) {
                     </span>
                   )}
                 </div>
-                {tc.result && (
+                {tc.result !== undefined && tc.result !== null && (
                   <pre className="text-xs overflow-x-auto">
                     {JSON.stringify(tc.result, null, 2)}
                   </pre>

@@ -44,7 +44,7 @@ import {
   ReviewStatus,
   ReviewPriority,
   ReviewFilters,
-  getCategoryLabel,
+  getReviewCategoryLabel,
   getPriorityLabel,
 } from '@/types/reviews';
 import { useReviews, useReviewStats } from '@/lib/hooks';
@@ -345,7 +345,7 @@ export default function ReviewsPage() {
               <SelectItem value="all">All categories</SelectItem>
               {Object.values(ReviewCategory).map((cat) => (
                 <SelectItem key={cat} value={cat}>
-                  {getCategoryLabel(cat)}
+                  {getReviewCategoryLabel(cat)}
                 </SelectItem>
               ))}
             </SelectContent>

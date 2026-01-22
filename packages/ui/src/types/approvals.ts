@@ -130,18 +130,25 @@ export interface ApprovalStats {
 }
 
 // Helper functions for display
-export function getApprovalStatusColor(status: ApprovalStatus): string {
+export function getApprovalStatusColor(status: ApprovalStatus | string): string {
   switch (status) {
+    case 'pending':
     case ApprovalStatus.PENDING:
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+    case 'approved':
     case ApprovalStatus.APPROVED:
       return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    case 'rejected':
     case ApprovalStatus.REJECTED:
       return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    case 'expired':
     case ApprovalStatus.EXPIRED:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+    case 'escalated':
     case ApprovalStatus.ESCALATED:
       return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
+    case 'cancelled':
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -172,42 +179,57 @@ export function getApprovalTypeIcon(type: ApprovalType): string {
   }
 }
 
-export function getApprovalTypeLabel(type: ApprovalType): string {
+export function getApprovalTypeLabel(type: ApprovalType | string): string {
   switch (type) {
+    case 'agent_action':
     case ApprovalType.AGENT_ACTION:
       return 'Agent Action';
+    case 'data_change':
     case ApprovalType.DATA_CHANGE:
       return 'Data Change';
+    case 'configuration':
     case ApprovalType.CONFIGURATION:
       return 'Configuration';
+    case 'deployment':
     case ApprovalType.DEPLOYMENT:
       return 'Deployment';
+    case 'access_grant':
     case ApprovalType.ACCESS_GRANT:
       return 'Access Grant';
+    case 'engagement':
     case ApprovalType.ENGAGEMENT:
       return 'Engagement';
+    case 'tool_execution':
     case ApprovalType.TOOL_EXECUTION:
       return 'Tool Execution';
+    case 'data_access':
     case ApprovalType.DATA_ACCESS:
       return 'Data Access';
+    case 'schema_change':
     case ApprovalType.SCHEMA_CHANGE:
       return 'Schema Change';
     default:
-      return 'Unknown';
+      // Capitalize and replace underscores for unknown types
+      return String(type).split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 }
 
-export function isUrgent(approval: ApprovalRequest | ApprovalListItem): boolean {
-  if (!approval.deadline) return false;
-  const deadline = new Date(approval.deadline);
+// Minimal type for deadline checking - works with both API and UI types
+type WithDeadline = { deadline?: string; expires_at?: string };
+
+export function isUrgent(approval: WithDeadline): boolean {
+  const deadlineStr = approval.deadline ?? approval.expires_at;
+  if (!deadlineStr) return false;
+  const deadline = new Date(deadlineStr);
   const now = new Date();
   const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
   return hoursUntilDeadline <= 4 && hoursUntilDeadline > 0;
 }
 
-export function isExpiringSoon(approval: ApprovalRequest | ApprovalListItem): boolean {
-  if (!approval.deadline) return false;
-  const deadline = new Date(approval.deadline);
+export function isExpiringSoon(approval: WithDeadline): boolean {
+  const deadlineStr = approval.deadline ?? approval.expires_at;
+  if (!deadlineStr) return false;
+  const deadline = new Date(deadlineStr);
   const now = new Date();
   const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
   return hoursUntilDeadline <= 24 && hoursUntilDeadline > 0;

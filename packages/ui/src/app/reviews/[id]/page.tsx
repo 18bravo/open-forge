@@ -33,7 +33,7 @@ import {
   getReviewStatusColor,
   getPriorityColor,
   getPriorityLabel,
-  getCategoryLabel,
+  getReviewCategoryLabel,
 } from '@/types/reviews';
 import { getInitials } from '@/lib/utils';
 import { useReview, useReviews, useCompleteReview, useDeferReview, useSkipReview } from '@/lib/hooks';
@@ -254,7 +254,7 @@ export default function ReviewDetailPage() {
             {getPriorityLabel(priority)}
           </Badge>
           <Badge variant="outline">
-            {getCategoryLabel(category)}
+            {getReviewCategoryLabel(category)}
           </Badge>
           {isCritical && (
             <Badge variant="destructive" className="flex items-center gap-1">

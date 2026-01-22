@@ -72,7 +72,7 @@ export default function DataSourcesPage({ params }: DataSourcesPageProps) {
   return (
     <DataSourcesList
       dataSourceIds={dataSourceIds}
-      engagementId={params.id}
+      engagementId={id}
     />
   );
 }

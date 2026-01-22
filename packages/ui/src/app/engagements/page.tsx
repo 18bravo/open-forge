@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -56,6 +57,18 @@ const priorityOptions: { value: EngagementPriority | 'all'; label: string }[] = 
 ];
 
 export default function EngagementsPage() {
+  return (
+    <Suspense fallback={
+      <div className="container py-6 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <EngagementsPageContent />
+    </Suspense>
+  );
+}
+
+function EngagementsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

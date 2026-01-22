@@ -1,8 +1,8 @@
 import { BookOpen, ArrowRight } from 'lucide-react';
 
 const posts = [
-  { title: 'Introducing Open Forge: The Open Source Ontology Platform', excerpt: 'Today we're launching Open Forge, an open-source alternative to proprietary data platforms...', date: 'January 2026', category: 'Announcement' },
-  { title: 'How Autonomous Agents Replace Forward-Deployed Engineers', excerpt: 'The traditional consulting model is broken. Here's how AI agents are changing the game...', date: 'Coming Soon', category: 'Technical' },
+  { title: 'Introducing Open Forge: The Open Source Ontology Platform', excerpt: 'Today we are launching Open Forge, an open-source alternative to proprietary data platforms...', date: 'January 2026', category: 'Announcement' },
+  { title: 'How Autonomous Agents Replace Forward-Deployed Engineers', excerpt: 'The traditional consulting model is broken. Here is how AI agents are changing the game...', date: 'Coming Soon', category: 'Technical' },
   { title: 'Building Your First Ontology with Open Forge', excerpt: 'A step-by-step guide to defining semantic, kinetic, and dynamic elements...', date: 'Coming Soon', category: 'Tutorial' },
 ];
 

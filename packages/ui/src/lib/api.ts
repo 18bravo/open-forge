@@ -202,6 +202,14 @@ export interface ApprovalRequest {
   approved_by?: string;
   approved_at?: string;
   rejection_reason?: string;
+  // Extended fields for UI compatibility
+  engagement_id?: string;
+  escalation_level?: string;
+  deadline?: string;
+  context_data?: Record<string, unknown>;
+  decided_by?: string;
+  decided_at?: string;
+  decision_comments?: string;
 }
 
 export interface ApprovalRequestSummary {
@@ -223,6 +231,7 @@ export interface ToolCall {
   error?: string;
   executed_at?: string;
   duration_ms?: number;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
 }
 
 export interface AgentMessage {

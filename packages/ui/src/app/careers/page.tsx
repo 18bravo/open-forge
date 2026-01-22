@@ -1,7 +1,7 @@
 import { Briefcase, MapPin, Clock, ArrowRight } from 'lucide-react';
 
 const positions = [
-  { title: 'Senior Full-Stack Engineer', location: 'Remote', type: 'Full-time', description: 'Help build the open-source ontology platform that's changing how enterprises work with data.' },
+  { title: 'Senior Full-Stack Engineer', location: 'Remote', type: 'Full-time', description: 'Help build the open-source ontology platform that is changing how enterprises work with data.' },
   { title: 'AI/ML Engineer', location: 'Remote', type: 'Full-time', description: 'Design and implement autonomous agents that replace traditional consulting models.' },
   { title: 'Developer Advocate', location: 'Remote', type: 'Full-time', description: 'Build and nurture the Open Forge community through content, events, and support.' },
 ];

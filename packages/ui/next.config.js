@@ -2,8 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Enable typed routes (moved from experimental in Next.js 16)
-  typedRoutes: true,
+  // Typed routes disabled - codebase uses dynamic routes extensively
+  // typedRoutes: true,
 
   // Turbopack configuration (default in Next.js 16)
   turbopack: {},

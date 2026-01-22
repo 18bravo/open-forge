@@ -21,7 +21,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   ApprovalActions,
@@ -31,9 +30,6 @@ import {
   type TimelineEvent,
 } from '@/components/approvals';
 import {
-  ApprovalRequest,
-  ApprovalType,
-  ApprovalStatus,
   getApprovalStatusColor,
   getApprovalTypeLabel,
   isUrgent,
@@ -142,7 +138,7 @@ export default function ApprovalDetailPage() {
   const urgent = isUrgent(approval);
   const expiringSoon = isExpiringSoon(approval);
   const isAgent = approval.requested_by.includes('Agent');
-  const isPending = approval.status === ApprovalStatus.PENDING || approval.status === ApprovalStatus.ESCALATED;
+  const isPending = approval.status === 'pending' || (approval.status as string) === 'escalated';
   const isMutating = decideApproval.isPending;
 
   return (
@@ -309,8 +305,8 @@ export default function ApprovalDetailPage() {
             <TabsContent value="changes" className="mt-4">
               {approval.context_data?.before && approval.context_data?.after ? (
                 <DiffViewer
-                  before={approval.context_data.before}
-                  after={approval.context_data.after}
+                  before={approval.context_data.before as Record<string, unknown>}
+                  after={approval.context_data.after as Record<string, unknown>}
                   title="Configuration Changes"
                   maxHeight="500px"
                 />
@@ -399,7 +395,7 @@ export default function ApprovalDetailPage() {
                 </Link>
               </div>
 
-              {approval.details?.risk_level && (
+              {typeof approval.details?.risk_level === 'string' && (
                 <>
                   <Separator />
                   <div>
@@ -415,7 +411,7 @@ export default function ApprovalDetailPage() {
                           'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
                       )}
                     >
-                      {(approval.details.risk_level as string).toUpperCase()}
+                      {approval.details.risk_level.toUpperCase()}
                     </Badge>
                   </div>
                 </>

@@ -163,8 +163,8 @@ describe('Button', () => {
   describe('type attribute', () => {
     it('defaults to button type', () => {
       render(<Button>Button</Button>)
-      const button = screen.getByRole('button')
       // Note: React defaults to no type attribute, browser defaults to submit
+      expect(screen.getByRole('button')).toBeInTheDocument()
     })
 
     it('accepts submit type', () => {

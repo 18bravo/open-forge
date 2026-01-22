@@ -64,7 +64,7 @@ export function useEngagementTraces(
   params?: UseEngagementTracesParams
 ) {
   return useQuery<PaginatedResponse<TraceInfo>>({
-    queryKey: observabilityKeys.engagementTraces(engagementId ?? '', params ?? {}),
+    queryKey: observabilityKeys.engagementTraces(engagementId ?? '', (params ?? {}) as Record<string, unknown>),
     queryFn: () => getEngagementTraces(engagementId!, params),
     enabled: !!engagementId,
     // Traces can change frequently during active engagements
@@ -105,7 +105,7 @@ export function useAgentTraces(
   params?: UseAgentTracesParams
 ) {
   return useQuery<PaginatedResponse<TraceInfo>>({
-    queryKey: observabilityKeys.agentTraces(agentId ?? '', params ?? {}),
+    queryKey: observabilityKeys.agentTraces(agentId ?? '', (params ?? {}) as Record<string, unknown>),
     queryFn: () => getAgentTraces(agentId!, params),
     enabled: !!agentId,
     staleTime: 30 * 1000,
@@ -155,7 +155,7 @@ export interface UseObservabilityStatsParams {
  */
 export function useObservabilityStats(params?: UseObservabilityStatsParams) {
   return useQuery<ObservabilityStats>({
-    queryKey: observabilityKeys.stats(params ?? {}),
+    queryKey: observabilityKeys.stats((params ?? {}) as Record<string, unknown>),
     queryFn: () => getObservabilityStats(params),
     staleTime: 60 * 1000, // 1 minute
     // Refresh stats periodically
@@ -219,7 +219,7 @@ export interface UseDashboardUrlParams {
  */
 export function useDashboardUrl(params?: UseDashboardUrlParams) {
   return useQuery<DashboardUrlResponse>({
-    queryKey: observabilityKeys.dashboardUrl(params ?? {}),
+    queryKey: observabilityKeys.dashboardUrl((params ?? {}) as Record<string, unknown>),
     queryFn: () => getDashboardUrl(params),
     staleTime: 5 * 60 * 1000, // 5 minutes - URLs don't change often
   });

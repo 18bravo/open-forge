@@ -4,16 +4,10 @@ import * as React from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-
-interface SystemHealth {
-  service: string;
-  status: 'healthy' | 'degraded' | 'down';
-  latency: number;
-  uptime: number;
-}
+import type { ServiceHealth } from '@/lib/api';
 
 interface SystemHealthCardProps {
-  health: SystemHealth;
+  health: ServiceHealth;
 }
 
 export function SystemHealthCard({ health }: SystemHealthCardProps) {
@@ -23,7 +17,7 @@ export function SystemHealthCard({ health }: SystemHealthCardProps) {
         return <CheckCircle2 className="h-5 w-5 text-green-500" />;
       case 'degraded':
         return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-      case 'down':
+      case 'unhealthy':
         return <XCircle className="h-5 w-5 text-red-500" />;
       default:
         return <Clock className="h-5 w-5 text-gray-500" />;
@@ -36,7 +30,7 @@ export function SystemHealthCard({ health }: SystemHealthCardProps) {
         return 'border-green-500/30 bg-green-500/5';
       case 'degraded':
         return 'border-yellow-500/30 bg-yellow-500/5';
-      case 'down':
+      case 'unhealthy':
         return 'border-red-500/30 bg-red-500/5';
       default:
         return 'border-gray-500/30 bg-gray-500/5';

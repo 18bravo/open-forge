@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Bot,
   CheckCircle2,
-  Clock,
   Cpu,
   History,
   Loader2,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
   Settings,
   Trash2,
-  XCircle,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';

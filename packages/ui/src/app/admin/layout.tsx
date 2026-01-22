@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Cog,
   Database,
-  FileText,
   LayoutDashboard,
   ListTodo,
   LogOut,

@@ -29,7 +29,7 @@ import {
   getReviewStatusColor,
   getPriorityColor,
   getPriorityLabel,
-  getCategoryLabel,
+  getReviewCategoryLabel,
 } from '@/types/reviews';
 
 // Icon mapping
@@ -131,7 +131,7 @@ export function ReviewItemCard({
             {/* Tags and assignee */}
             <div className="flex items-center flex-wrap gap-2 mt-2">
               <Badge variant="outline" className="text-xs">
-                {getCategoryLabel(item.category)}
+                {getReviewCategoryLabel(item.category)}
               </Badge>
 
               {item.batch_id && (

@@ -31,7 +31,6 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useConnectors, useTestConnector } from '@/lib/hooks';
-import type { ConnectorSummary } from '@/lib/api';
 
 const connectorTypes = [
   { id: 'database', name: 'Database', icon: Database },

@@ -1,8 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -82,7 +83,18 @@ const statusIcons: Record<DataSourceStatus, React.ReactNode> = {
 };
 
 export default function DataSourcesPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={
+      <div className="container py-6 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <DataSourcesPageContent />
+    </Suspense>
+  );
+}
+
+function DataSourcesPageContent() {
   const searchParams = useSearchParams();
 
   const [search, setSearch] = React.useState(searchParams.get('search') || '');

@@ -9,7 +9,6 @@ import {
   BellRing,
   CheckCircle2,
   XCircle,
-  ArrowUpRight,
   RefreshCw,
   Volume2,
   VolumeX,
@@ -37,7 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ApprovalCard } from '@/components/approvals/ApprovalCard';
 import {
@@ -67,7 +66,8 @@ export default function ApprovalsPage() {
   const pendingQuery = usePendingApprovals({ page_size: 50 });
   const allQuery = useApprovals({
     page_size: 50,
-    status: filters.status?.[0] as ApprovalStatus | undefined
+    // Cast to API's status type - enum values match string literals
+    status: filters.status?.[0] as 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled' | undefined
   });
   const currentQuery = selectedTab === 'pending' ? pendingQuery : allQuery;
   const { data, isLoading, isError, refetch } = currentQuery;
@@ -76,7 +76,7 @@ export default function ApprovalsPage() {
 
   // Extract approvals from paginated response
   const approvals = React.useMemo(() => {
-    return (data?.items ?? []) as ApprovalListItem[];
+    return (data?.items ?? []) as unknown as ApprovalListItem[];
   }, [data]);
 
   // Compute stats from real data
@@ -85,11 +85,12 @@ export default function ApprovalsPage() {
     const allApprovals = approvals;
 
     const totalPending = pendingQuery.data?.total ?? 0;
-    const urgentCount = pendingApprovals.filter(a => isUrgent(a as ApprovalListItem)).length;
+    // isUrgent now accepts any object with deadline or expires_at
+    const urgentCount = pendingApprovals.filter(a => isUrgent(a)).length;
     const expiringSoonCount = pendingApprovals.filter(a => {
-      const item = a as ApprovalListItem;
-      if (!item.deadline) return false;
-      const deadline = new Date(item.deadline);
+      const deadlineStr = a.expires_at;
+      if (!deadlineStr) return false;
+      const deadline = new Date(deadlineStr);
       const now = new Date();
       const hoursUntilDeadline = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
       return hoursUntilDeadline > 0 && hoursUntilDeadline <= 24;
@@ -173,14 +174,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  // Action handlers
-  const handleApprove = async (id: string) => {
-    await decideApproval.mutateAsync({ id, approved: true });
-  };
-
-  const handleReject = async (id: string, reason: string) => {
-    await decideApproval.mutateAsync({ id, approved: false, reason });
-  };
+  // Individual action handlers removed - bulk actions handle approval/rejection
 
   // Bulk actions
   const handleBulkApprove = async () => {

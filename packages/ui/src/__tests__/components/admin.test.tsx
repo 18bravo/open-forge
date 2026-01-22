@@ -1,8 +1,8 @@
 /**
  * Tests for Admin dashboard components
  */
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { SystemHealthCard } from '@/components/admin/SystemHealthCard'
 import { AgentStatusGrid } from '@/components/admin/AgentStatusGrid'
 import { PipelineStatusTable } from '@/components/admin/PipelineStatusTable'

@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useUsers } from '@/lib/hooks';
-import type { UserSummary } from '@/lib/api';
 
 interface Role {
   id: string;

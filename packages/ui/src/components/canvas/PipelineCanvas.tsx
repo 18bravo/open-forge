@@ -71,11 +71,9 @@ export interface PipelineNode extends Node {
   };
 }
 
-export interface PipelineEdge extends Edge {
-  data?: {
-    label?: string;
-  };
-}
+export type PipelineEdge = Edge<{
+  label?: string;
+}>;
 
 export interface PipelineCanvasProps {
   engagementId: string;

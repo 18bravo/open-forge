@@ -191,7 +191,7 @@ export function getCategoryIcon(category: ReviewCategory): string {
   }
 }
 
-export function getCategoryLabel(category: ReviewCategory): string {
+export function getReviewCategoryLabel(category: ReviewCategory): string {
   switch (category) {
     case ReviewCategory.DATA_QUALITY:
       return 'Data Quality';

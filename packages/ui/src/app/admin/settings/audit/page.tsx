@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   AlertCircle,
   ArrowLeft,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Download,
@@ -14,7 +13,6 @@ import {
   RefreshCw,
   Search,
   User,
-  XCircle,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';

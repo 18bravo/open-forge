@@ -6,13 +6,15 @@ import { cn } from '@/lib/utils';
 
 type AudienceKey = 'engineers' | 'leaders' | 'executives';
 
+type IconComponent = React.ComponentType<{ className?: string }>;
+
 interface AudienceData {
   key: AudienceKey;
-  icon: React.ElementType;
+  icon: IconComponent;
   label: string;
   headline: string;
   body: string[];
-  ctas: { label: string; href: string; icon: React.ElementType; primary?: boolean }[];
+  ctas: { label: string; href: string; icon: IconComponent; primary?: boolean }[];
 }
 
 const audiences: AudienceData[] = [

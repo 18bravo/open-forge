@@ -63,7 +63,7 @@ async def create_engagement(
         tags=engagement.tags,
         metadata=engagement.metadata,
         requires_approval=engagement.requires_approval,
-        created_by=user.user_id,
+        created_by=user.id,
         created_at=now,
         updated_at=now,
     )
@@ -74,7 +74,7 @@ async def create_engagement(
         {
             "engagement_id": engagement_id,
             "name": engagement.name,
-            "created_by": user.user_id,
+            "created_by": user.id,
         }
     )
 

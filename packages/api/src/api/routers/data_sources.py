@@ -148,7 +148,7 @@ async def create_data_source(
         schema_config=source.schema_config,
         tags=source.tags,
         metadata=source.metadata,
-        created_by=user.user_id,
+        created_by=user.id,
         created_at=now,
         updated_at=now,
     )
@@ -159,7 +159,7 @@ async def create_data_source(
             "source_id": source_id,
             "name": source.name,
             "type": source.source_type.value,
-            "created_by": user.user_id,
+            "created_by": user.id,
         }
     )
 

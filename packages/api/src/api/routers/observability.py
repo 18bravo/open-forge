@@ -335,7 +335,7 @@ async def submit_feedback(
             score=feedback.score,
             comment=feedback.comment,
             key=feedback.key,
-            submitted_by=user.user_id,
+            submitted_by=user.id,
         )
 
         return FeedbackResponse(
@@ -344,7 +344,7 @@ async def submit_feedback(
             comment=result.comment,
             key=result.key,
             submitted_at=result.submitted_at,
-            submitted_by=user.user_id,
+            submitted_by=user.id,
         )
 
     except ValueError as e:

@@ -627,7 +627,7 @@ async def generate_code(
     add_span_attribute("codegen.ontology_id", request.ontology_id)
     add_span_attribute("codegen.targets", [t.value for t in request.targets])
     add_span_attribute("codegen.dry_run", request.dry_run)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Validate ontology exists
     # TODO: Actually fetch and validate ontology from database
@@ -678,7 +678,7 @@ async def generate_code(
             "job_id": job_id,
             "ontology_id": request.ontology_id,
             "targets": [t.value for t in request.targets],
-            "user_id": user.user_id,
+            "user_id": user.id,
         }
     )
 
@@ -711,7 +711,7 @@ async def preview_code(
     add_span_attribute("codegen.ontology_id", request.ontology_id)
     add_span_attribute("codegen.target", request.target.value)
     add_span_attribute("codegen.entity_name", request.entity_name)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Validate ontology exists
     # TODO: Actually fetch and validate ontology from database
@@ -769,7 +769,7 @@ async def get_job_status(
     Returns progress percentage, completed files, and any errors.
     """
     add_span_attribute("codegen.job_id", job_id)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     job = _generation_jobs.get(job_id)
     if not job:
@@ -798,7 +798,7 @@ async def download_generated_files(
     all generated artifacts.
     """
     add_span_attribute("codegen.job_id", job_id)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     job = _generation_jobs.get(job_id)
     if not job:
@@ -854,7 +854,7 @@ async def list_templates(
     Returns template metadata including supported targets, options,
     and output languages.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("filter.category", category.value if category else None)
 
     now = datetime.utcnow()
@@ -1012,7 +1012,7 @@ async def delete_job(
     record and generated files will be removed.
     """
     add_span_attribute("codegen.job_id", job_id)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     job = _generation_jobs.get(job_id)
     if not job:
@@ -1031,7 +1031,7 @@ async def delete_job(
             "codegen.job_cancelled",
             {
                 "job_id": job_id,
-                "user_id": user.user_id,
+                "user_id": user.id,
             }
         )
 

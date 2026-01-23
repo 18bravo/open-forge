@@ -1,20 +1,109 @@
 """
 FastAPI dependencies for dependency injection.
+
+This module integrates forge-core authentication, events, and other services
+into the FastAPI application via dependency injection.
 """
-import os
+
 from typing import Annotated, AsyncGenerator, Optional
-from fastapi import Depends, Header, HTTPException, status
+
+from fastapi import Depends
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database.connection import AsyncSessionLocal
-from core.messaging.events import EventBus
-from api.schemas.common import UserContext
-from api.auth import decode_access_token
+
+# Import forge-core auth components
+from forge_core.auth import (
+    AuthProvider,
+    AuthProviderConfig,
+    AuthProviderType,
+    JWTAuthProvider,
+    JWTConfig,
+    User,
+    configure_auth,
+    get_current_user as forge_get_current_user,
+    get_current_user_optional as forge_get_current_user_optional,
+    require_permission as forge_require_permission,
+    require_role as forge_require_role,
+)
+
+# Import forge-core events
+from forge_core.events.backends.memory import InMemoryEventBus
+from forge_core.events.bus import Event
+
+# Import forge-core storage
+from forge_core.storage import StorageBackend, StorageConfig, StorageError
+from forge_core.storage.abstraction import StorageProvider
+from forge_core.storage.backends.local import LocalStorageBackend
+
+# Import forge-core gateway (rate limiting, circuit breaker, health)
+from forge_core.gateway import (
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitState,
+    HealthCheck,
+    HealthCheckRegistry,
+    HealthStatus,
+    RateLimitConfig,
+    RateLimiter,
+    RateLimitExceeded,
+)
+from forge_core.gateway.rate_limit import InMemoryRateLimiter
+from forge_core.gateway.circuit_breaker import DefaultCircuitBreaker
 
 
-# Global event bus instance
-_event_bus: Optional[EventBus] = None
+# -----------------------------------------------------------------------------
+# Auth Provider Configuration
+# -----------------------------------------------------------------------------
 
+# Global auth provider instance
+_auth_provider: Optional[AuthProvider] = None
+
+
+async def init_auth_provider() -> AuthProvider:
+    """
+    Initialize the authentication provider.
+
+    Call this during application startup.
+
+    Returns:
+        Configured auth provider instance
+    """
+    global _auth_provider
+
+    if _auth_provider is None:
+        # Configure JWT-based auth provider
+        auth_config = AuthProviderConfig(
+            provider_type=AuthProviderType.INTERNAL,
+            issuer="open-forge",
+            client_id="api",
+        )
+        jwt_config = JWTConfig()  # Uses environment variables
+        _auth_provider = JWTAuthProvider(auth_config, jwt_config)
+
+        # Register with forge-core middleware
+        configure_auth(_auth_provider)
+
+    return _auth_provider
+
+
+async def close_auth_provider() -> None:
+    """Clean up auth provider on shutdown."""
+    global _auth_provider
+    _auth_provider = None
+
+
+def get_auth_provider_instance() -> AuthProvider:
+    """Get the configured auth provider."""
+    if _auth_provider is None:
+        raise RuntimeError("Auth provider not initialized. Call init_auth_provider() first.")
+    return _auth_provider
+
+
+# -----------------------------------------------------------------------------
+# Database Session
+# -----------------------------------------------------------------------------
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -31,23 +120,24 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-def get_event_bus() -> EventBus:
+# -----------------------------------------------------------------------------
+# Event Bus
+# -----------------------------------------------------------------------------
+
+# Global event bus instance
+_event_bus: Optional[InMemoryEventBus] = None
+
+
+async def init_event_bus() -> InMemoryEventBus:
     """
-    Dependency that provides the event bus instance.
+    Initialize the global event bus instance.
 
-    Raises:
-        RuntimeError: If event bus is not initialized.
+    Uses forge-core's InMemoryEventBus for local development.
+    In production, this should be replaced with Redis or PostgreSQL backend.
     """
-    if _event_bus is None:
-        raise RuntimeError("EventBus not initialized. Call init_event_bus() first.")
-    return _event_bus
-
-
-async def init_event_bus() -> EventBus:
-    """Initialize the global event bus instance."""
     global _event_bus
     if _event_bus is None:
-        _event_bus = EventBus()
+        _event_bus = InMemoryEventBus(source="open-forge-api")
         await _event_bus.connect()
     return _event_bus
 
@@ -60,143 +150,225 @@ async def close_event_bus() -> None:
         _event_bus = None
 
 
-async def get_current_user(
-    authorization: Annotated[Optional[str], Header()] = None,
-    x_user_id: Annotated[Optional[str], Header(alias="X-User-ID")] = None,
-) -> UserContext:
+def get_event_bus() -> InMemoryEventBus:
     """
-    Dependency that extracts and validates the current user from request headers.
-
-    In production, this would validate JWT tokens. For development, it accepts
-    user info from headers.
-
-    Args:
-        authorization: Bearer token for authentication
-        x_user_id: User ID header (for development/testing)
-
-    Returns:
-        UserContext with user information
+    Dependency that provides the event bus instance.
 
     Raises:
-        HTTPException: If authentication fails
+        RuntimeError: If event bus is not initialized.
     """
-    # Development mode: accept user ID from header
-    if x_user_id:
-        return UserContext(
-            user_id=x_user_id,
-            username=f"user_{x_user_id}",
-            roles=["user"],
-            permissions=["read", "write"]
+    if _event_bus is None:
+        raise RuntimeError("EventBus not initialized. Call init_event_bus() first.")
+    return _event_bus
+
+
+# -----------------------------------------------------------------------------
+# Storage
+# -----------------------------------------------------------------------------
+
+# Global storage backend instance
+_storage_backend: Optional[StorageBackend] = None
+
+
+async def init_storage(storage_path: Optional[str] = None) -> StorageBackend:
+    """
+    Initialize the global storage backend.
+
+    Uses forge-core's LocalStorageBackend for development.
+    In production, this should be replaced with S3 or Azure backend.
+
+    Args:
+        storage_path: Optional path for local storage. Defaults to ./data/storage
+
+    Returns:
+        Configured storage backend
+    """
+    import os
+    global _storage_backend
+
+    if _storage_backend is None:
+        # Use local storage for development, S3/Azure in production
+        path = storage_path or os.environ.get("STORAGE_PATH", "./data/storage")
+
+        config = StorageConfig(
+            provider=StorageProvider.LOCAL,
+            bucket=path,
         )
+        _storage_backend = LocalStorageBackend(config)
+        await _storage_backend.connect()
 
-    # Production mode: validate JWT token
-    if authorization:
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authorization header format",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        token = authorization[7:]
-
-        # Validate JWT token
-        try:
-            payload = decode_access_token(token)
-            if payload is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired token",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-
-            return UserContext(
-                user_id=payload.sub,
-                username=payload.username,
-                email=payload.email,
-                roles=payload.roles,
-                permissions=payload.permissions,
-            )
-        except ValueError as e:
-            # JWT_SECRET_KEY not configured
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Authentication service not configured",
-            ) from e
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    return _storage_backend
 
 
-async def get_optional_user(
-    authorization: Annotated[Optional[str], Header()] = None,
-    x_user_id: Annotated[Optional[str], Header(alias="X-User-ID")] = None,
-) -> Optional[UserContext]:
+async def close_storage() -> None:
+    """Close the storage backend connection."""
+    global _storage_backend
+    if _storage_backend is not None:
+        await _storage_backend.disconnect()
+        _storage_backend = None
+
+
+def get_storage() -> StorageBackend:
     """
-    Dependency that optionally extracts the current user.
+    Dependency that provides the storage backend instance.
 
-    Returns None if no authentication is provided instead of raising an exception.
+    Raises:
+        RuntimeError: If storage is not initialized.
     """
-    if not authorization and not x_user_id:
-        return None
-
-    try:
-        return await get_current_user(authorization, x_user_id)
-    except HTTPException:
-        return None
+    if _storage_backend is None:
+        raise RuntimeError("Storage not initialized. Call init_storage() first.")
+    return _storage_backend
 
 
-def require_permission(permission: str):
+# -----------------------------------------------------------------------------
+# Rate Limiting
+# -----------------------------------------------------------------------------
+
+# Global rate limiter instance
+_rate_limiter: Optional[RateLimiter] = None
+
+
+async def init_rate_limiter(
+    requests_per_minute: int = 100,
+) -> RateLimiter:
     """
-    Dependency factory that requires a specific permission.
+    Initialize the global rate limiter.
+
+    Uses forge-core's InMemoryRateLimiter for development.
+    In production, use Redis-backed rate limiter.
 
     Args:
-        permission: Required permission string
+        requests_per_minute: Maximum requests per minute per key
 
     Returns:
-        Dependency function that validates the permission
+        Configured rate limiter
     """
-    async def permission_checker(
-        user: Annotated[UserContext, Depends(get_current_user)]
-    ) -> UserContext:
-        if permission not in user.permissions and "admin" not in user.permissions:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission '{permission}' required"
-            )
-        return user
+    from datetime import timedelta
+    global _rate_limiter
 
-    return permission_checker
+    if _rate_limiter is None:
+        config = RateLimitConfig(
+            requests=requests_per_minute,
+            window=timedelta(minutes=1),
+            key_prefix="api",
+        )
+        _rate_limiter = InMemoryRateLimiter(config)
+
+    return _rate_limiter
 
 
-def require_role(role: str):
+def get_rate_limiter() -> RateLimiter:
     """
-    Dependency factory that requires a specific role.
+    Dependency that provides the rate limiter instance.
+
+    Raises:
+        RuntimeError: If rate limiter is not initialized.
+    """
+    if _rate_limiter is None:
+        raise RuntimeError("Rate limiter not initialized. Call init_rate_limiter() first.")
+    return _rate_limiter
+
+
+# -----------------------------------------------------------------------------
+# Circuit Breaker
+# -----------------------------------------------------------------------------
+
+# Global circuit breaker registry
+_circuit_breakers: dict[str, CircuitBreaker] = {}
+
+
+def get_circuit_breaker(
+    name: str,
+    failure_threshold: int = 5,
+    recovery_timeout_seconds: int = 60,
+) -> CircuitBreaker:
+    """
+    Get or create a circuit breaker for a service.
+
+    Circuit breakers prevent cascading failures when external services are down.
 
     Args:
-        role: Required role string
+        name: Unique name for the circuit breaker (e.g., "external-api")
+        failure_threshold: Number of failures before opening circuit
+        recovery_timeout_seconds: Seconds to wait before trying recovery
 
     Returns:
-        Dependency function that validates the role
+        Circuit breaker instance
     """
-    async def role_checker(
-        user: Annotated[UserContext, Depends(get_current_user)]
-    ) -> UserContext:
-        if role not in user.roles and "admin" not in user.roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{role}' required"
-            )
-        return user
+    from datetime import timedelta
 
-    return role_checker
+    if name not in _circuit_breakers:
+        config = CircuitBreakerConfig(
+            failure_threshold=failure_threshold,
+            recovery_timeout=timedelta(seconds=recovery_timeout_seconds),
+        )
+        _circuit_breakers[name] = DefaultCircuitBreaker(name, config)
+
+    return _circuit_breakers[name]
 
 
-# Type aliases for dependency injection
+# -----------------------------------------------------------------------------
+# Health Check Registry
+# -----------------------------------------------------------------------------
+
+# Global health check registry
+_health_registry: Optional[HealthCheckRegistry] = None
+
+
+def init_health_registry() -> HealthCheckRegistry:
+    """Initialize the health check registry."""
+    global _health_registry
+    if _health_registry is None:
+        _health_registry = HealthCheckRegistry()
+    return _health_registry
+
+
+def get_health_registry() -> HealthCheckRegistry:
+    """Get the health check registry."""
+    if _health_registry is None:
+        raise RuntimeError("Health registry not initialized. Call init_health_registry() first.")
+    return _health_registry
+
+
+# -----------------------------------------------------------------------------
+# User Dependencies (wrapping forge-core)
+# -----------------------------------------------------------------------------
+
+# Use forge-core's get_current_user directly
+get_current_user = forge_get_current_user
+get_current_user_optional = forge_get_current_user_optional
+
+# Use forge-core's permission/role checkers
+require_permission = forge_require_permission
+require_role = forge_require_role
+
+
+# -----------------------------------------------------------------------------
+# Type Aliases for Dependency Injection
+# -----------------------------------------------------------------------------
+
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
-CurrentUser = Annotated[UserContext, Depends(get_current_user)]
-OptionalUser = Annotated[Optional[UserContext], Depends(get_optional_user)]
-EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+OptionalUser = Annotated[Optional[User], Depends(get_current_user_optional)]
+EventBusDep = Annotated[InMemoryEventBus, Depends(get_event_bus)]
+StorageDep = Annotated[StorageBackend, Depends(get_storage)]
+RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+HealthRegistryDep = Annotated[HealthCheckRegistry, Depends(get_health_registry)]
+
+
+# -----------------------------------------------------------------------------
+# Helper Functions
+# -----------------------------------------------------------------------------
+
+async def publish_event(topic: str, event_type: str, payload: dict) -> None:
+    """
+    Helper to publish an event to the event bus.
+
+    Args:
+        topic: Event topic (e.g., "engagement.created")
+        event_type: Type of event (e.g., "created", "updated", "deleted")
+        payload: Event payload data
+    """
+    bus = get_event_bus()
+    event = Event(topic=topic, type=event_type, payload=payload)
+    await bus.publish(event)

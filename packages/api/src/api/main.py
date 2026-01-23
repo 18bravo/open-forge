@@ -24,7 +24,16 @@ from api.routers import (
     codegen_router,
 )
 from api.graphql import graphql_app
-from api.dependencies import init_event_bus, close_event_bus
+from api.dependencies import (
+    init_event_bus,
+    close_event_bus,
+    init_auth_provider,
+    close_auth_provider,
+    init_storage,
+    close_storage,
+    init_rate_limiter,
+    init_health_registry,
+)
 from api.schemas.common import ErrorResponse, ErrorDetail
 
 from core.config import get_settings
@@ -50,15 +59,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize database
         await init_db()
 
-        # Initialize event bus
+        # Initialize auth provider (forge-core)
+        await init_auth_provider()
+
+        # Initialize event bus (forge-core)
         await init_event_bus()
+
+        # Initialize storage (forge-core)
+        await init_storage()
+
+        # Initialize gateway components (forge-core)
+        await init_rate_limiter()
+        init_health_registry()
 
     yield
 
     # Shutdown
     with tracer.start_as_current_span("app.shutdown"):
+        # Close storage
+        await close_storage()
+
         # Close event bus
         await close_event_bus()
+
+        # Close auth provider
+        await close_auth_provider()
 
         # Close database connections
         await close_db()

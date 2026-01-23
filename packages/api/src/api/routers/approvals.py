@@ -157,7 +157,7 @@ async def list_my_requests(
     List approval requests created by the current user.
     """
     add_span_attribute("pagination.page", page)
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # TODO: Implement database query
     return PaginatedResponse.create(
@@ -231,7 +231,7 @@ async def create_approval(
         description=request.description,
         resource_id=request.resource_id,
         resource_type=request.resource_type,
-        requested_by=user.user_id,
+        requested_by=user.id,
         requested_at=now,
         details=request.details,
         expires_at=expires_at,
@@ -243,7 +243,7 @@ async def create_approval(
             "approval_id": approval_id,
             "type": request.approval_type.value,
             "resource_id": request.resource_id,
-            "requested_by": user.user_id,
+            "requested_by": user.id,
         }
     )
 

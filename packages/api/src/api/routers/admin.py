@@ -275,7 +275,7 @@ async def get_system_health(
     Returns detailed health information for database, cache, storage,
     and other system components.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Return mock data for now - will integrate with actual health checks
     now = datetime.utcnow()
@@ -336,7 +336,7 @@ async def list_agent_clusters(
     """
     List all agent clusters with pagination.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with agent registry
@@ -384,7 +384,7 @@ async def get_agent_cluster(
     """
     Get detailed information about a specific agent cluster.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("cluster.slug", slug)
 
     # Mock data - will integrate with agent registry
@@ -425,7 +425,7 @@ async def list_agent_types(
     """
     List all available agent types.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Mock data - will integrate with agent registry
     return [
@@ -473,7 +473,7 @@ async def list_pipelines(
     """
     List all pipelines with pagination.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with Dagster
@@ -526,7 +526,7 @@ async def get_pipeline(
     """
     Get detailed information about a specific pipeline.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pipeline.id", pipeline_id)
 
     # Mock data - will integrate with Dagster
@@ -579,7 +579,7 @@ async def list_pipeline_runs(
     """
     List pipeline runs with pagination and filtering.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with Dagster
@@ -637,7 +637,7 @@ async def get_settings(
     """
     Get current system settings.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Mock data - will integrate with settings storage
     return SystemSettings(
@@ -673,7 +673,7 @@ async def update_settings(
 
     Only provided fields will be updated.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # TODO: Implement actual settings update
     # For now, return mock updated settings
@@ -724,7 +724,7 @@ async def list_connectors(
     """
     List all configured connectors.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with connector registry
@@ -788,7 +788,7 @@ async def list_users(
     """
     List all system users.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with user management
@@ -862,7 +862,7 @@ async def list_audit_logs(
     """
     List audit log entries with filtering.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
     add_span_attribute("pagination.page", page)
 
     # Mock data - will integrate with audit log storage
@@ -938,7 +938,7 @@ async def get_dashboard_stats(
     Returns summary metrics for the admin dashboard including
     engagement counts, task metrics, agent status, and system health.
     """
-    add_span_attribute("user.id", user.user_id)
+    add_span_attribute("user.id", user.id)
 
     # Mock data - will integrate with actual data sources
     return DashboardStats(

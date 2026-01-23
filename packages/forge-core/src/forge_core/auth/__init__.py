@@ -11,9 +11,20 @@ This module provides centralized authentication and authorization for Open Forge
 - **middleware**: FastAPI middleware for request authentication
 """
 
-from forge_core.auth.middleware import AuthMiddleware, get_current_user
+from forge_core.auth.jwt_provider import JWTAuthProvider, JWTConfig
+from forge_core.auth.middleware import (
+    AuthMiddleware,
+    AuthenticationError,
+    AuthorizationError,
+    configure_auth,
+    get_auth_provider,
+    get_current_user,
+    get_current_user_optional,
+    require_permission,
+    require_role,
+)
 from forge_core.auth.permissions import Permission, PermissionSet
-from forge_core.auth.provider import AuthProvider, AuthProviderConfig
+from forge_core.auth.provider import AuthProvider, AuthProviderConfig, AuthProviderType
 from forge_core.auth.rbac import Role, RoleAssignment
 from forge_core.auth.row_level import Filter, RowLevelPolicy
 from forge_core.auth.session import Session, SessionManager
@@ -23,6 +34,10 @@ __all__ = [
     # Provider
     "AuthProvider",
     "AuthProviderConfig",
+    "AuthProviderType",
+    # JWT Provider
+    "JWTAuthProvider",
+    "JWTConfig",
     # User
     "User",
     # RBAC
@@ -39,5 +54,12 @@ __all__ = [
     "SessionManager",
     # Middleware
     "AuthMiddleware",
+    "AuthenticationError",
+    "AuthorizationError",
+    "configure_auth",
+    "get_auth_provider",
     "get_current_user",
+    "get_current_user_optional",
+    "require_permission",
+    "require_role",
 ]

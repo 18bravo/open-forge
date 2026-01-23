@@ -151,7 +151,7 @@ async def list_reviews(
             priority=ReviewPriority.MEDIUM,
             status=ReviewStatus.IN_REVIEW,
             created_at=datetime.utcnow(),
-            assigned_to=user.user_id
+            assigned_to=user.id
         ),
     ]
 
@@ -351,7 +351,7 @@ async def assign_review(
         {
             "review_id": review_id,
             "assigned_to": request.user_id,
-            "assigned_by": user.user_id,
+            "assigned_by": user.id,
         }
     )
 
@@ -382,7 +382,7 @@ async def claim_review(
     add_span_attribute("review.id", review_id)
 
     # TODO: Implement by calling assign with current user
-    # Equivalent to assign_review with user.user_id
+    # Equivalent to assign_review with user.id
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

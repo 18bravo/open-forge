@@ -121,18 +121,25 @@ class InMemoryEventBus(BaseEventBus):
 
     def _matches_pattern(self, pattern: str, topic: str) -> bool:
         """Check if a topic matches a subscription pattern."""
-        # Convert pattern to fnmatch format
-        # "**" matches any number of levels
-        # "*" matches a single level
+        # "**" matches any number of levels (any characters including dots)
+        # "*" matches a single level (characters except dots)
         if pattern == "**":
             return True
 
-        # Replace ** with a placeholder, convert single * to [^.]*
-        fnmatch_pattern = pattern.replace("**", "\x00")
-        fnmatch_pattern = fnmatch_pattern.replace("*", "[^.]*")
-        fnmatch_pattern = fnmatch_pattern.replace("\x00", "*")
+        # Exact match
+        if pattern == topic:
+            return True
 
-        return fnmatch.fnmatch(topic, fnmatch_pattern)
+        # Convert to regex for more precise matching
+        # First escape special regex characters except * and .
+        import re
+        regex_pattern = re.escape(pattern)
+        # Now unescape our wildcards: \*\* -> .* (multi-level), \* -> [^.]* (single-level)
+        regex_pattern = regex_pattern.replace(r"\*\*", ".*")
+        regex_pattern = regex_pattern.replace(r"\*", r"[^.]*")
+        regex_pattern = f"^{regex_pattern}$"
+
+        return bool(re.match(regex_pattern, topic))
 
     def clear(self) -> None:
         """Clear all handlers and subscriptions (useful for testing)."""

@@ -40,9 +40,9 @@ class TestPermission:
 
     def test_permission_from_string_with_id(self) -> None:
         """Test parsing a permission with resource ID from string."""
-        perm = Permission.from_string("dataset:123:write")
+        perm = Permission.from_string("dataset:123:update")
         assert perm.resource_type == ResourceType.DATASET
-        assert perm.action == Action.WRITE
+        assert perm.action == Action.UPDATE
         assert perm.resource_id == "123"
 
     def test_permission_from_invalid_string(self) -> None:
@@ -56,7 +56,7 @@ class TestPermission:
         """Test exact permission matching."""
         perm1 = Permission(ResourceType.DATASET, Action.READ)
         perm2 = Permission(ResourceType.DATASET, Action.READ)
-        perm3 = Permission(ResourceType.DATASET, Action.WRITE)
+        perm3 = Permission(ResourceType.DATASET, Action.UPDATE)
 
         assert perm1.matches(perm2)
         assert not perm1.matches(perm3)
